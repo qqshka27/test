@@ -1,0 +1,4461 @@
+<title>Кот в колодце</title>
+<meta name="description" content="Пошаговый рогалик: спуститесь на дно колодца и спасите кота Барсика от Древнего Пса.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tiny5&family=PT+Sans:wght@400;700&display=swap">
+<style>
+/* Раскладка: игра на весь экран — HUD сверху, поле в центре, журнал и кнопки снизу.
+   Мир игры один — тёмное подземелье при свете фонаря, поэтому тема у страницы одна, тёмная. */
+:root {
+  --bg: #0d0b10;
+  --panel: #17131c;
+  --panel-2: #211b28;
+  --line: #2f2738;
+  --ink: #efe6d8;
+  --dim: #9a8fa0;
+  --lantern: #ffb347;
+  --hp: #d8433c;
+  --hp-dim: #4a1d22;
+  --xp: #8fd3ff;
+  --gold: #ffd34e;
+  --good: #7fd36a;
+  --bad: #ff7a6b;
+  --magic: #c9b3ff;
+  --font-display: "Tiny5", "Courier New", monospace;
+  --font-body: "PT Sans", "Trebuchet MS", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.4 var(--font-body);
+  overflow: hidden; overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+  touch-action: manipulation;
+}
+button { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--lantern); outline-offset: 2px; }
+
+#app { height: 100%; display: flex; flex-direction: column; max-width: 1200px; margin: 0 auto; }
+
+/* ---------- HUD ---------- */
+.hud {
+  display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+  background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap;
+}
+.depth { font-family: var(--font-display); font-size: 15px; color: var(--lantern); white-space: nowrap; letter-spacing: 0.02em; }
+.depth b { font-weight: 700; }
+.bar { position: relative; flex: 1 1 120px; min-width: 110px; height: 20px; background: var(--hp-dim); border-radius: 3px; overflow: hidden; box-shadow: inset 0 0 0 1px #0006; }
+.bar i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(#e85a4c, var(--hp)); transition: width .25s; }
+.bar span { position: absolute; inset: 0; display: grid; place-items: center; font: 600 13px var(--font-display); text-shadow: 0 1px 0 #000; font-variant-numeric: tabular-nums; }
+.xpbar { height: 3px; background: #1c2a33; border-radius: 2px; overflow: hidden; margin-top: 3px; }
+.xpbar i { display: block; height: 100%; background: var(--xp); transition: width .25s; }
+.hpwrap { flex: 1 1 140px; min-width: 120px; }
+.stats { display: flex; gap: 10px; font: 14px var(--font-display); color: var(--dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.stats b { color: var(--ink); font-weight: 600; }
+.stats .g b { color: var(--gold); }
+.hud-btns { display: flex; gap: 6px; margin-left: auto; }
+.icon-btn {
+  min-width: 36px; height: 32px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--panel-2); cursor: pointer; font: 14px var(--font-display); color: var(--dim);
+}
+.icon-btn:hover { color: var(--ink); border-color: #4a3d55; }
+.icon-btn[aria-pressed="false"] { opacity: .55; }
+
+/* ---------- Поле ---------- */
+.stage { position: relative; flex: 1; min-height: 0; background: #000; overflow: hidden; }
+#view { position: absolute; inset: 0; display: block; touch-action: none; image-rendering: pixelated; }
+#mini {
+  position: absolute; top: 8px; right: 8px; width: 144px; height: 96px; image-rendering: pixelated;
+  background: #0008; border: 1px solid #ffffff1a; border-radius: 4px; cursor: pointer;
+}
+.chips { position: absolute; top: 8px; left: 8px; display: flex; flex-wrap: wrap; gap: 4px; max-width: 55%; pointer-events: none; }
+.chip { font: 12px var(--font-display); padding: 2px 7px; border-radius: 10px; background: #000a; border: 1px solid currentColor; }
+.banner {
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); max-width: calc(100% - 32px);
+  font: 14px var(--font-display); background: #000c; border: 1px solid var(--lantern); color: var(--lantern);
+  padding: 6px 12px; border-radius: 6px; text-align: center;
+}
+.banner button { margin-left: 8px; background: var(--lantern); color: #1a1008; border: 0; border-radius: 4px; padding: 3px 10px; cursor: pointer; font: 600 13px var(--font-display); }
+.banner button.ghost { background: transparent; color: var(--dim); border: 1px solid var(--line); }
+
+/* ---------- Журнал ---------- */
+.log {
+  background: var(--panel); border-top: 1px solid var(--line); padding: 6px 16px; height: 5.6em; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: flex-end; font-size: 14px; line-height: 1.35;
+}
+.log p { margin: 0; color: var(--dim); }
+.log p.new { color: var(--ink); }
+.log .hit { color: #f0e0c8; } .log .bad { color: var(--bad); } .log .good { color: var(--good); }
+.log .loot { color: var(--gold); } .log .story { color: #e3c08f; font-style: italic; } .log .depth { color: var(--lantern); font-family: var(--font-display); }
+.log .boss { color: #ff9ab0; font-weight: 700; } .log .ident { color: var(--magic); } .log .shop { color: #9fe2ff; }
+.log .hint { color: #7f8fa0; } .log .kill { color: #d8d0c0; } .log .miss { color: #8a8290; }
+.log p.old { opacity: .55; }
+
+/* ---------- Кнопки ---------- */
+.controls { display: flex; gap: 10px; padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--panel); border-top: 1px solid var(--line); align-items: center; }
+.dpad { display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 40px); gap: 4px; }
+.dpad button, .acts button {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+  font: 15px var(--font-display); color: var(--ink); touch-action: manipulation;
+}
+.dpad button:active, .acts button:active { background: #3a2f45; transform: translateY(1px); }
+.dpad button { font: 18px var(--font-body); }
+.dpad .c { font: 12px var(--font-body); color: var(--dim); }
+.acts { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; min-width: 0; }
+.acts button { min-height: 40px; padding: 4px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
+.acts button small { font: 11px var(--font-body); color: var(--dim); }
+.acts button.hot { border-color: var(--lantern); color: var(--lantern); }
+.acts button:disabled { opacity: .35; }
+@media (pointer: fine) { .dpad { display: none; } .acts { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+@media (pointer: coarse) { .acts button small { display: none; } .acts button { font-size: 14px; } }
+@media (max-width: 420px) {
+  .hud { gap: 6px 10px; padding: 6px 12px; }
+  .stats { gap: 8px; font-size: 13px; }
+  .controls { gap: 8px; padding-left: 12px; padding-right: 12px; }
+  .dpad { grid-template-columns: repeat(3, 42px); grid-template-rows: repeat(3, 38px); }
+  #mini { width: 96px; height: 64px; }
+  .log { padding: 6px 12px; font-size: 13px; }
+}
+
+/* ---------- Окна ---------- */
+.overlay { position: fixed; inset: 0; background: #000b; display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+.sheet {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; width: min(560px, 100%);
+  max-height: calc(100% - 16px); display: flex; flex-direction: column; box-shadow: 0 20px 60px #000c;
+}
+.sheet header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.sheet h2 { margin: 0; font: 600 20px var(--font-display); color: var(--lantern); flex: 1; text-wrap: balance; }
+.sheet .body { overflow-y: auto; padding: 8px 16px 16px; min-height: 0; }
+.close { background: none; border: 1px solid var(--line); border-radius: 6px; width: 34px; height: 32px; cursor: pointer; color: var(--dim); font: 16px var(--font-display); }
+.equip-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 10px; }
+.equip-row div { background: var(--panel-2); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.equip-row small { display: block; color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.equip-row b { font-weight: 400; font-family: var(--font-display); }
+.inv { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.inv button {
+  width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; background: var(--panel-2);
+  border: 1px solid transparent; border-radius: 8px; padding: 6px 10px; cursor: pointer;
+}
+.inv button:hover, .inv button.sel { border-color: var(--lantern); }
+.inv img { width: 32px; height: 32px; image-rendering: pixelated; flex: none; }
+.inv .nm { flex: 1; min-width: 0; }
+.inv .tag { font: 12px var(--font-display); color: var(--lantern); }
+.inv .key { font: 12px var(--font-display); color: var(--dim); width: 1.2em; }
+.empty { color: var(--dim); padding: 12px 0; }
+.detail { margin-top: 12px; padding: 12px; background: var(--panel-2); border-radius: 8px; border: 1px solid var(--line); }
+.detail h3 { margin: 0 0 4px; font: 600 17px var(--font-display); }
+.detail p { margin: 0 0 10px; color: var(--dim); }
+.detail .row { display: flex; flex-wrap: wrap; gap: 6px; }
+.btn {
+  background: var(--lantern); color: #1a1008; border: 0; border-radius: 6px; padding: 8px 14px; cursor: pointer;
+  font: 600 15px var(--font-display);
+}
+.btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.btn.ghost:hover { border-color: var(--lantern); }
+
+/* ---------- Титульный экран ---------- */
+.title { position: fixed; inset: 0; z-index: 20; background: radial-gradient(ellipse at 50% 30%, #2a1c22e6 0%, #0d0b10f2 70%); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; overflow-y: auto; text-align: center; }
+.title canvas { width: 160px; height: 160px; image-rendering: pixelated; }
+.title h1 { font: 700 clamp(40px, 11vw, 76px)/1 var(--font-display); margin: 8px 0 6px; color: var(--lantern); letter-spacing: .01em; text-shadow: 0 4px 0 #6b3a1a, 0 0 40px #ffb34740; text-wrap: balance; }
+.title .sub { max-width: 34em; color: var(--dim); margin: 0 0 22px; }
+.title .menu { display: flex; flex-direction: column; gap: 8px; width: min(300px, 100%); }
+.title .menu .btn { padding: 12px; font-size: 17px; }
+.title .seed { display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 14px; color: var(--dim); font-size: 13px; flex-wrap: wrap; }
+.title input { width: 110px; background: var(--panel-2); border: 1px solid var(--line); color: var(--ink); border-radius: 6px; padding: 6px 8px; font: 14px var(--font-display); }
+.records { margin-top: 22px; width: min(420px, 100%); text-align: left; }
+.records h3 { font: 600 14px var(--font-display); color: var(--dim); text-transform: uppercase; letter-spacing: .08em; margin: 0 0 6px; }
+.records ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+.records li { display: flex; gap: 10px; font-size: 13px; color: var(--dim); background: #ffffff08; padding: 4px 8px; border-radius: 4px; }
+.records li b { color: var(--gold); font: 600 14px var(--font-display); min-width: 3.5em; font-variant-numeric: tabular-nums; }
+.records li span { flex: 1; min-width: 0; }
+.help dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 8px 0; }
+.help dt { font: 14px var(--font-display); color: var(--lantern); white-space: nowrap; }
+.help dd { margin: 0; color: var(--ink); }
+.help p { color: var(--dim); }
+.end-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 12px 0; }
+.end-stats div { background: var(--panel-2); border-radius: 6px; padding: 8px 10px; }
+.end-stats small { display: block; color: var(--dim); font-size: 12px; }
+.end-stats b { font: 600 20px var(--font-display); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .bar i, .xpbar i { transition: none; } }
+</style>
+
+<div id="app">
+  <header class="hud">
+    <div class="depth" id="depth">Подвал · <b>1</b></div>
+    <div class="hpwrap">
+      <div class="bar" id="hpbar"><i id="hpfill"></i><span id="hptext">24 / 24</span></div>
+      <div class="xpbar" title="Опыт до следующего уровня"><i id="xpfill"></i></div>
+    </div>
+    <div class="stats">
+      <span title="Уровень героя">ур <b id="lvl">1</b></span>
+      <span title="Урон оружия">урон <b id="dmg">2–4</b></span>
+      <span title="Броня">броня <b id="arm">1</b></span>
+      <span class="g" title="Монеты">монеты <b id="gold">0</b></span>
+    </div>
+    <div class="hud-btns">
+      <button class="icon-btn" id="btn-sound" aria-pressed="true" title="Звук">♪</button>
+      <button class="icon-btn" id="btn-help" title="Как играть (?)">?</button>
+      <button class="icon-btn" id="btn-menu" title="Меню">≡</button>
+    </div>
+  </header>
+  <main class="stage" id="stage">
+    <canvas id="view" aria-label="Игровое поле"></canvas>
+    <canvas id="mini" aria-label="Мини-карта" title="Мини-карта (M)"></canvas>
+    <div class="chips" id="chips"></div>
+    <div class="banner" id="banner" hidden></div>
+  </main>
+  <section class="log" id="log" aria-live="polite"></section>
+  <nav class="controls" id="controls">
+    <div class="dpad" id="dpad">
+      <button data-d="-1,-1" aria-label="Вверх-влево">↖</button><button data-d="0,-1" aria-label="Вверх">↑</button><button data-d="1,-1" aria-label="Вверх-вправо">↗</button>
+      <button data-d="-1,0" aria-label="Влево">←</button><button data-d="0,0" class="c" aria-label="Ждать">•</button><button data-d="1,0" aria-label="Вправо">→</button>
+      <button data-d="-1,1" aria-label="Вниз-влево">↙</button><button data-d="0,1" aria-label="Вниз">↓</button><button data-d="1,1" aria-label="Вниз-вправо">↘</button>
+    </div>
+    <div class="acts">
+      <button id="act-explore">Разведка<small>X</small></button>
+      <button id="act-pick">Взять<small>G</small></button>
+      <button id="act-down">Вниз<small>&gt;</small></button>
+      <button id="act-inv">Рюкзак<small>I</small></button>
+      <button id="act-fire">Бросить<small>F</small></button>
+      <button id="act-wait">Ждать<small>Пробел</small></button>
+    </div>
+  </nav>
+</div>
+
+<div class="overlay" id="modal" hidden></div>
+<div class="title" id="title" hidden></div>
+
+<script>
+"use strict";
+// ---- 00_core.js ----
+// ===== Ядро: генератор случайных чисел, утилиты, константы =====
+
+const MAP_W = 48;
+const MAP_H = 32;
+const MAX_DEPTH = 10;
+const FOV_RADIUS = 8;
+const INV_SIZE = 18;
+
+// Тайлы карты
+const T = {
+  WALL: 0,
+  FLOOR: 1,
+  DOOR: 2,
+  ODOOR: 3,
+  STAIRS: 4,
+  UPSTAIRS: 5,
+  WATER: 6,
+  GRASS: 7,
+  CHASM: 8,
+  BARS: 9, // решётка клетки: непроходима, но прозрачна
+};
+
+const DIRS8 = [
+  [0, -1], [1, 0], [0, 1], [-1, 0],
+  [1, -1], [1, 1], [-1, 1], [-1, -1],
+];
+const DIRS4 = DIRS8.slice(0, 4);
+
+// mulberry32: маленький, быстрый, с сериализуемым состоянием
+function makeRNG(seed) {
+  let s = seed >>> 0;
+  const r = {
+    next() {
+      s = (s + 0x6d2b79f5) | 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    },
+    int(a, b) { return a + Math.floor(r.next() * (b - a + 1)); },
+    pick(arr) { return arr[Math.floor(r.next() * arr.length)]; },
+    chance(p) { return r.next() < p; },
+    shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(r.next() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    },
+    weighted(entries) { // [[value, weight], ...]
+      let total = 0;
+      for (const e of entries) total += e[1];
+      let roll = r.next() * total;
+      for (const e of entries) {
+        roll -= e[1];
+        if (roll < 0) return e[0];
+      }
+      return entries[entries.length - 1][0];
+    },
+    get state() { return s; },
+    set state(v) { s = v | 0; },
+  };
+  return r;
+}
+
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const inBounds = (x, y) => x >= 0 && y >= 0 && x < MAP_W && y < MAP_H;
+const idx = (x, y) => y * MAP_W + x;
+const dist = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+const sign = (v) => (v > 0 ? 1 : v < 0 ? -1 : 0);
+
+// Правильные русские окончания: plural(5, 'монета', 'монеты', 'монет')
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many;
+}
+
+// Линия Брезенхэма от a до b (включая обе точки)
+function lineBetween(x0, y0, x1, y1) {
+  const pts = [];
+  let dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
+  let sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  for (;;) {
+    pts.push([x0, y0]);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+  }
+  return pts;
+}
+
+function capitalize(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
+
+// ---- 01_data.js ----
+// ===== Данные: монстры, предметы, темы уровней =====
+
+// acc — меткость, eva — уворот, arm — броня, speed — 100 = как у героя
+const MONSTERS = {
+  rat: {
+    name: 'крыса', acc: 'крысу', sprite: 'rat', hp: 5, dmg: [1, 3], accu: 8, eva: 3, arm: 0,
+    speed: 100, xp: 2, depth: [1, 3], weight: 10, ai: 'melee', verb: 'кусает',
+    desc: 'Подвальная крыса. Наглая и вечно голодная.',
+  },
+  bat: {
+    name: 'летучая мышь', acc: 'летучую мышь', sprite: 'bat', hp: 4, dmg: [1, 3], accu: 9, eva: 7, arm: 0,
+    speed: 200, xp: 3, depth: [1, 4], weight: 7, ai: 'erratic', verb: 'кусает',
+    desc: 'Мечется туда-сюда. Попасть по ней непросто.',
+  },
+  slime: {
+    name: 'слизь', acc: 'слизь', sprite: 'slime', hp: 12, dmg: [1, 4], accu: 7, eva: 0, arm: 0,
+    speed: 50, xp: 4, depth: [2, 5], weight: 6, ai: 'melee', verb: 'обволакивает', splits: true,
+    desc: 'Медленная и липкая. От удара делится надвое.', death: 'растекается лужей',
+  },
+  goblin: {
+    name: 'гоблин-воришка', acc: 'гоблина-воришку', sprite: 'goblin', hp: 9, dmg: [2, 4], accu: 9, eva: 5, arm: 0,
+    speed: 120, xp: 6, depth: [2, 6], weight: 6, ai: 'thief', verb: 'бьёт',
+    desc: 'Мечтает о ваших монетах. Схватит и сбежит.',
+  },
+  kobold: {
+    name: 'кобольд', acc: 'кобольда', sprite: 'kobold', hp: 10, dmg: [2, 5], accu: 9, eva: 3, arm: 1,
+    speed: 100, xp: 5, depth: [2, 5], weight: 8, ai: 'melee', verb: 'колет копьём',
+    desc: 'Мелкий, злобный, с копьём наперевес.',
+  },
+  skeleton: {
+    name: 'скелет', acc: 'скелета', sprite: 'skeleton', hp: 16, dmg: [3, 6], accu: 10, eva: 3, arm: 2,
+    speed: 100, xp: 9, depth: [3, 8], weight: 8, ai: 'melee', verb: 'рубит', death: 'рассыпается грудой костей',
+    desc: 'Гремит костями. Не устаёт и не боится.', undead: true,
+  },
+  archer: {
+    name: 'скелет-лучник', acc: 'скелета-лучника', sprite: 'archer', hp: 12, dmg: [2, 5], accu: 10, eva: 4, arm: 1,
+    speed: 100, xp: 10, depth: [4, 8], weight: 5, ai: 'ranged', range: 6, verb: 'стреляет в', death: 'рассыпается грудой костей',
+    desc: 'Держится на расстоянии и стреляет из лука.', undead: true,
+  },
+  spider: {
+    name: 'паук', acc: 'паука', sprite: 'spider', hp: 14, dmg: [2, 5], accu: 11, eva: 5, arm: 1,
+    speed: 120, xp: 11, depth: [5, 9], weight: 6, ai: 'melee', verb: 'кусает', poison: 0.35,
+    desc: 'Ядовитый укус. Лучше не затягивать бой.',
+  },
+  mimic: {
+    name: 'мимик', acc: 'мимика', sprite: 'mimic', hp: 25, dmg: [4, 8], accu: 12, eva: 2, arm: 3,
+    speed: 100, xp: 15, depth: [4, 10], weight: 0, ai: 'mimic', verb: 'кусает',
+    desc: 'Сундук с зубами. Классика.',
+  },
+  ghost: {
+    name: 'призрак', acc: 'призрака', sprite: 'ghost', hp: 15, dmg: [3, 6], accu: 11, eva: 10, arm: 0,
+    speed: 100, xp: 13, depth: [5, 10], weight: 5, ai: 'ghost', verb: 'касается', phase: true,
+    desc: 'Проходит сквозь стены. Холодное прикосновение.', death: 'развеивается', undead: true,
+  },
+  ogre: {
+    name: 'огр', acc: 'огра', sprite: 'ogre', hp: 34, dmg: [5, 11], accu: 11, eva: 1, arm: 2,
+    speed: 80, xp: 20, depth: [6, 10], weight: 5, ai: 'melee', verb: 'бьёт дубиной',
+    desc: 'Огромный и неторопливый. Бьёт очень больно.',
+  },
+  shade: {
+    name: 'тень', acc: 'тень', sprite: 'shade', hp: 22, dmg: [4, 9], accu: 13, eva: 8, arm: 0,
+    speed: 110, xp: 22, depth: [8, 10], weight: 4, ai: 'melee', verb: 'режет', stealth: true,
+    desc: 'Видна только вблизи. Не стойте в темноте.', death: 'рассеивается',
+  },
+  necro: {
+    name: 'некромант', acc: 'некроманта', sprite: 'necro', hp: 20, dmg: [2, 4], accu: 9, eva: 4, arm: 1,
+    speed: 100, xp: 25, depth: [7, 10], weight: 3, ai: 'caster', verb: 'бьёт посохом',
+    desc: 'Поднимает скелетов. Убейте его первым.',
+  },
+  puppy: {
+    name: 'щенок', acc: 'щенка', sprite: 'puppy', hp: 6, dmg: [1, 3], accu: 9, eva: 5, arm: 0,
+    speed: 150, xp: 2, depth: [99, 99], weight: 0, ai: 'melee', verb: 'кусает за пятку', dog: true,
+    desc: 'Тяв! Маленький, но зубастый.', death: 'убегает, поджав хвост',
+  },
+  dog: {
+    name: 'Древний Пёс', acc: 'Древнего Пса', sprite: 'dog', hp: 170, dmg: [7, 13], accu: 15, eva: 4, arm: 3,
+    speed: 100, xp: 0, depth: [99, 99], weight: 0, ai: 'boss', verb: 'кусает', boss: true, dog: true,
+    desc: 'Сторож Барсика. Огромный, лохматый, очень обиженный на всех котов.',
+  },
+  merchant: {
+    name: 'торговец', acc: 'торговца', sprite: 'merchant', hp: 999, dmg: [0, 0], accu: 0, eva: 0, arm: 0,
+    speed: 100, xp: 0, depth: [99, 99], weight: 0, ai: 'merchant', verb: '', peaceful: true,
+    desc: 'Продаёт всякое. Как он сюда попал, лучше не спрашивать.',
+  },
+  cat: {
+    name: 'Барсик', acc: 'Барсика', sprite: 'cat', hp: 999, dmg: [0, 0], accu: 0, eva: 0, arm: 0,
+    speed: 100, xp: 0, depth: [99, 99], weight: 0, ai: 'cat', verb: '', peaceful: true,
+    desc: 'Ваш кот. Рыжий, толстый и совершенно не раскаивается.',
+  },
+};
+
+const WEAPONS = {
+  dagger:  { name: 'кинжал', sprite: 'dagger', dmg: [2, 4], accu: 2, depth: 1, price: 20 },
+  sword:   { name: 'короткий меч', sprite: 'sword', dmg: [3, 6], accu: 1, depth: 2, price: 45 },
+  axe:     { name: 'топор', sprite: 'axe', dmg: [4, 8], accu: -1, depth: 3, price: 70 },
+  mace:    { name: 'булава', sprite: 'mace', dmg: [5, 9], accu: 0, depth: 5, price: 100 },
+  longsword: { name: 'длинный меч', sprite: 'longsword', dmg: [6, 11], accu: 1, depth: 6, price: 140 },
+  hammer:  { name: 'боевой молот', sprite: 'hammer', dmg: [7, 14], accu: -2, depth: 8, price: 180 },
+};
+
+const ARMORS = {
+  leather: { name: 'кожаная куртка', sprite: 'leather', arm: 1, eva: 0, depth: 1, price: 20 },
+  studded: { name: 'клёпаная куртка', sprite: 'studded', arm: 2, eva: 0, depth: 2, price: 45 },
+  chain:   { name: 'кольчуга', sprite: 'chain', arm: 3, eva: -1, depth: 4, price: 80 },
+  scale:   { name: 'чешуйчатый доспех', sprite: 'scale', arm: 4, eva: -1, depth: 6, price: 120 },
+  plate:   { name: 'латы', sprite: 'plate', arm: 6, eva: -3, depth: 8, price: 170 },
+};
+
+// Зелья и свитки выглядят по-разному в каждой игре, пока их не опознаешь
+const POTIONS = {
+  heal:     { name: 'лечения', weight: 24, good: true, price: 30 },
+  strength: { name: 'силы', weight: 6, good: true, price: 90 },
+  vision:   { name: 'ясновидения', weight: 10, good: true, price: 35 },
+  haste:    { name: 'ускорения', weight: 10, good: true, price: 40 },
+  regen:    { name: 'регенерации', weight: 10, good: true, price: 40 },
+  exp:      { name: 'опыта', weight: 4, good: true, price: 100 },
+  poison:   { name: 'яда', weight: 10, good: false, price: 15 },
+  confuse:  { name: 'помутнения', weight: 9, good: false, price: 15 },
+};
+const POTION_LOOKS = [
+  ['мутное', '#8a8f6a'], ['алое', '#d8433c'], ['лазурное', '#3f8fe0'], ['изумрудное', '#3fbf6a'],
+  ['янтарное', '#e0a43a'], ['фиолетовое', '#9a5ad6'], ['чёрное', '#3b3442'], ['розовое', '#f07fb4'],
+  ['искрящееся', '#e8e8f8'], ['бурое', '#8a5a34'],
+];
+
+const SCROLLS = {
+  teleport: { name: 'телепортации', weight: 12, price: 30 },
+  mapping:  { name: 'карты', weight: 12, price: 35 },
+  enchant:  { name: 'улучшения', weight: 14, price: 60, needsItem: 'equip' },
+  identify: { name: 'опознания', weight: 14, price: 25, needsItem: 'unknown' },
+  fear:     { name: 'ужаса', weight: 8, price: 35 },
+  fire:     { name: 'огня', weight: 8, price: 40 },
+  summon:   { name: 'призыва', weight: 6, price: 10 },
+};
+const SCROLL_SYLLABLES = ['зур', 'бал', 'ок', 'тиш', 'мра', 'вел', 'кон', 'дым', 'ыр', 'хаш', 'пло', 'нэк', 'ра', 'жул', 'фен', 'ус', 'гро', 'ми'];
+
+const WANDS = {
+  bolt:  { name: 'молнии', weight: 10, price: 80, charges: [3, 6] },
+  sleep: { name: 'сна', weight: 8, price: 60, charges: [3, 5] },
+  slow:  { name: 'замедления', weight: 7, price: 50, charges: [3, 6] },
+  dig:   { name: 'копания', weight: 5, price: 50, charges: [4, 8] },
+  blink: { name: 'скачка', weight: 6, price: 60, charges: [3, 5] },
+};
+const WAND_LOOKS = ['дубовая', 'костяная', 'медная', 'ивовая', 'хрустальная', 'железная', 'кедровая'];
+
+const FOODS = {
+  pie:     { name: 'пирожок с капустой', sprite: 'pie', heal: 7, price: 10 },
+  sausage: { name: 'сосиска', sprite: 'sausage', heal: 4, price: 12 },
+};
+
+// Темы глубин
+const THEMES = {
+  cellar: {
+    name: 'Подвал', wall: '#6b4a3a', wallHi: '#8a6450', wallLo: '#4a3026', floor: '#2a2320', floorDot: '#352c28',
+    water: '#2c4a63', grass: '#3d5a2e', fog: '#0d0a09', ambient: 'Сыро. Пахнет картошкой и мышами.',
+  },
+  crypt: {
+    name: 'Катакомбы', wall: '#545a6e', wallHi: '#70778e', wallLo: '#383c4c', floor: '#1f2129', floorDot: '#292c37',
+    water: '#28405e', grass: '#3a4a3a', fog: '#08090c', ambient: 'Тихо. Только где-то капает вода.',
+  },
+  caves: {
+    name: 'Пещеры', wall: '#3f5e55', wallHi: '#56806f', wallLo: '#2a3f39', floor: '#1b2220', floorDot: '#243029',
+    water: '#1f4d5c', grass: '#3f6b35', fog: '#070a09', ambient: 'Своды теряются во тьме. Шуршит мох.',
+  },
+  lair: {
+    name: 'Логово Пса', wall: '#6e3f4f', wallHi: '#8f5466', wallLo: '#4a2733', floor: '#241a1e', floorDot: '#30232a',
+    water: '#4a2a3a', grass: '#5a3a2a', fog: '#0c0708', ambient: 'Пахнет мокрой псиной. Где-то жалобно мяукают.',
+  },
+};
+
+function themeFor(depth) {
+  if (depth >= MAX_DEPTH) return 'lair';
+  if (depth >= 7) return 'caves';
+  if (depth >= 4) return 'crypt';
+  return 'cellar';
+}
+
+// Фразы на входе в уровень: следы Барсика
+const CAT_HINTS = [
+  'На полу клок рыжей шерсти. Барсик был здесь.',
+  'Издалека доносится обиженное «мяу».',
+  'На стене свежие следы когтей. Кошачьих.',
+  'Кто-то опрокинул миску. Ну конечно.',
+  'Пахнет валерьянкой. Барсик точно где-то внизу.',
+  'В пыли цепочка маленьких следов уходит вниз.',
+  'Вы слышите, как где-то внизу лает собака. Огромная.',
+  'Между камней застряла мышь. Неподвижная. Подарок?',
+  'Где-то внизу лай и мяуканье. Скорее!',
+];
+
+// ---- 02_map.js ----
+// ===== Генерация карт =====
+
+function isPassableTile(t) {
+  return t === T.FLOOR || t === T.DOOR || t === T.ODOOR || t === T.STAIRS ||
+    t === T.UPSTAIRS || t === T.WATER || t === T.GRASS;
+}
+function blocksSight(t) {
+  return t === T.WALL || t === T.DOOR || t === T.GRASS;
+}
+
+function newTiles(fill) {
+  const a = new Uint8Array(MAP_W * MAP_H);
+  a.fill(fill);
+  return a;
+}
+
+// BFS-расстояния от точки по проходимым клеткам (двери считаются проходимыми)
+function bfsDistances(tiles, sx, sy, passable = isPassableTile) {
+  const d = new Int32Array(MAP_W * MAP_H).fill(-1);
+  const q = [idx(sx, sy)];
+  d[q[0]] = 0;
+  for (let h = 0; h < q.length; h++) {
+    const c = q[h], cx = c % MAP_W, cy = (c / MAP_W) | 0;
+    for (const [dx, dy] of DIRS8) {
+      const nx = cx + dx, ny = cy + dy;
+      if (!inBounds(nx, ny)) continue;
+      const n = idx(nx, ny);
+      if (d[n] >= 0 || !passable(tiles[n])) continue;
+      d[n] = d[c] + 1;
+      q.push(n);
+    }
+  }
+  return d;
+}
+
+function carveRoom(tiles, r) {
+  for (let y = r.y; y < r.y + r.h; y++)
+    for (let x = r.x; x < r.x + r.w; x++) tiles[idx(x, y)] = T.FLOOR;
+}
+
+function carveCorridor(tiles, rng, ax, ay, bx, by) {
+  const horizFirst = rng.chance(0.5);
+  const cells = [];
+  let x = ax, y = ay;
+  const stepX = () => { while (x !== bx) { x += sign(bx - x); cells.push([x, y]); } };
+  const stepY = () => { while (y !== by) { y += sign(by - y); cells.push([x, y]); } };
+  if (horizFirst) { stepX(); stepY(); } else { stepY(); stepX(); }
+  for (const [cx, cy] of cells) if (tiles[idx(cx, cy)] === T.WALL) tiles[idx(cx, cy)] = T.FLOOR;
+}
+
+const roomCenter = (r) => ({ x: r.x + (r.w >> 1), y: r.y + (r.h >> 1) });
+const inRoom = (r, x, y) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
+
+function genRooms(rng) {
+  const tiles = newTiles(T.WALL);
+  const rooms = [];
+  const target = rng.int(8, 12);
+  for (let tries = 0; tries < 400 && rooms.length < target; tries++) {
+    const w = rng.int(4, 10), h = rng.int(3, 7);
+    const x = rng.int(1, MAP_W - w - 2), y = rng.int(1, MAP_H - h - 2);
+    const r = { x, y, w, h };
+    let ok = true;
+    for (const o of rooms) {
+      if (x - 2 < o.x + o.w && x + w + 2 > o.x && y - 2 < o.y + o.h && y + h + 2 > o.y) { ok = false; break; }
+    }
+    if (ok) rooms.push(r);
+  }
+  for (const r of rooms) carveRoom(tiles, r);
+  // Цепочка комнат по x плюс несколько петель — чтобы можно было убегать кругами
+  const order = rooms.slice().sort((a, b) => a.x - b.x);
+  for (let i = 0; i < order.length - 1; i++) {
+    const a = roomCenter(order[i]), b = roomCenter(order[i + 1]);
+    carveCorridor(tiles, rng, a.x, a.y, b.x, b.y);
+  }
+  const loops = rng.int(1, 3);
+  for (let i = 0; i < loops; i++) {
+    const a = roomCenter(rng.pick(rooms)), b = roomCenter(rng.pick(rooms));
+    carveCorridor(tiles, rng, a.x, a.y, b.x, b.y);
+  }
+  // Двери там, где коридор входит в комнату
+  for (const r of rooms) {
+    for (let x = r.x - 1; x <= r.x + r.w; x++) {
+      for (let y = r.y - 1; y <= r.y + r.h; y++) {
+        const onRing = x === r.x - 1 || x === r.x + r.w || y === r.y - 1 || y === r.y + r.h;
+        if (!onRing || !inBounds(x, y) || tiles[idx(x, y)] !== T.FLOOR) continue;
+        const wallL = !inBounds(x - 1, y) || tiles[idx(x - 1, y)] === T.WALL;
+        const wallR = !inBounds(x + 1, y) || tiles[idx(x + 1, y)] === T.WALL;
+        const wallU = !inBounds(x, y - 1) || tiles[idx(x, y - 1)] === T.WALL;
+        const wallD = !inBounds(x, y + 1) || tiles[idx(x, y + 1)] === T.WALL;
+        if (((wallL && wallR) || (wallU && wallD)) && rng.chance(0.55)) tiles[idx(x, y)] = T.DOOR;
+      }
+    }
+  }
+  return { tiles, rooms };
+}
+
+function genCaves(rng) {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    let tiles = newTiles(T.WALL);
+    for (let y = 1; y < MAP_H - 1; y++)
+      for (let x = 1; x < MAP_W - 1; x++)
+        tiles[idx(x, y)] = rng.chance(0.44) ? T.WALL : T.FLOOR;
+    for (let it = 0; it < 5; it++) {
+      const next = newTiles(T.WALL);
+      for (let y = 1; y < MAP_H - 1; y++) {
+        for (let x = 1; x < MAP_W - 1; x++) {
+          let walls = 0;
+          for (let dy = -1; dy <= 1; dy++)
+            for (let dx = -1; dx <= 1; dx++)
+              if (tiles[idx(x + dx, y + dy)] === T.WALL) walls++;
+          next[idx(x, y)] = walls >= 5 || (it < 2 && walls <= 1) ? T.WALL : T.FLOOR;
+        }
+      }
+      tiles = next;
+    }
+    // Оставляем только самую большую связную область
+    const seen = new Int32Array(MAP_W * MAP_H).fill(-1);
+    let best = -1, bestSize = 0, region = 0;
+    for (let i = 0; i < tiles.length; i++) {
+      if (tiles[i] !== T.FLOOR || seen[i] >= 0) continue;
+      const d = bfsDistances(tiles, i % MAP_W, (i / MAP_W) | 0);
+      let size = 0;
+      for (let j = 0; j < d.length; j++) if (d[j] >= 0) { seen[j] = region; size++; }
+      if (size > bestSize) { bestSize = size; best = region; }
+      region++;
+    }
+    if (bestSize < 520) continue;
+    for (let i = 0; i < tiles.length; i++) if (tiles[i] === T.FLOOR && seen[i] !== best) tiles[i] = T.WALL;
+    return { tiles, rooms: [] };
+  }
+  return genRooms(rng); // запасной вариант, если пещера не задалась
+}
+
+// Пятна воды и травы для атмосферы
+function sprinkle(tiles, rng, tile, blobs) {
+  for (let b = 0; b < blobs; b++) {
+    let x = rng.int(2, MAP_W - 3), y = rng.int(2, MAP_H - 3);
+    const steps = rng.int(6, 22);
+    for (let s = 0; s < steps; s++) {
+      if (inBounds(x, y) && tiles[idx(x, y)] === T.FLOOR) tiles[idx(x, y)] = tile;
+      const [dx, dy] = rng.pick(DIRS4);
+      x = clamp(x + dx, 1, MAP_W - 2); y = clamp(y + dy, 1, MAP_H - 2);
+    }
+  }
+}
+
+function randomFloorIn(tiles, rng, room, avoid) {
+  for (let t = 0; t < 200; t++) {
+    const x = room ? rng.int(room.x, room.x + room.w - 1) : rng.int(1, MAP_W - 2);
+    const y = room ? rng.int(room.y, room.y + room.h - 1) : rng.int(1, MAP_H - 2);
+    if (tiles[idx(x, y)] === T.FLOOR && !(avoid && avoid(x, y))) return { x, y };
+  }
+  return null;
+}
+
+// Логово Пса: ручная арена с клеткой Барсика наверху
+function genLair(rng) {
+  const tiles = newTiles(T.WALL);
+  const arena = { x: 8, y: 2, w: 32, h: 14 };
+  carveRoom(tiles, arena);
+  // Колонны
+  for (const [px, py] of [[13, 6], [13, 11], [34, 6], [34, 11], [18, 9], [29, 9]]) {
+    tiles[idx(px, py)] = T.WALL;
+    tiles[idx(px + 1, py)] = T.WALL;
+  }
+  // Клетка с котом
+  const cat = { x: 24, y: 3 };
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++)
+      if (dx || dy) tiles[idx(cat.x + dx, cat.y + dy)] = T.BARS;
+  // Проход вниз и стартовая комната
+  const start = { x: 24, y: 27 };
+  const startRoom = { x: 19, y: 24, w: 11, h: 6 };
+  carveRoom(tiles, startRoom);
+  for (let y = arena.y + arena.h; y < startRoom.y; y++) tiles[idx(24, y)] = T.FLOOR;
+  tiles[idx(24, 20)] = T.DOOR;
+  // Две боковые кладовки с припасами
+  const left = { x: 6, y: 20, w: 7, h: 5 };
+  const right = { x: 35, y: 20, w: 7, h: 5 };
+  carveRoom(tiles, left); carveRoom(tiles, right);
+  carveCorridor(tiles, rng, 12, 22, 19, 26);
+  carveCorridor(tiles, rng, 35, 22, 29, 26);
+  sprinkle(tiles, rng, T.GRASS, 3);
+  tiles[idx(start.x, start.y)] = T.UPSTAIRS;
+  return { tiles, rooms: [arena, startRoom, left, right], start, stairs: null, cat, arena };
+}
+
+function generateLevel(depth, rng) {
+  const theme = themeFor(depth);
+  if (depth >= MAX_DEPTH) {
+    const lv = genLair(rng);
+    lv.theme = theme;
+    return lv;
+  }
+  const base = theme === 'caves' ? genCaves(rng) : genRooms(rng);
+  const { tiles, rooms } = base;
+  if (theme === 'caves') { sprinkle(tiles, rng, T.WATER, rng.int(2, 4)); sprinkle(tiles, rng, T.GRASS, rng.int(3, 6)); }
+  else { sprinkle(tiles, rng, T.WATER, rng.int(0, 2)); sprinkle(tiles, rng, T.GRASS, rng.int(0, 3)); }
+
+  // Старт и лестница — максимально далеко друг от друга
+  let start = rooms.length ? randomFloorIn(tiles, rng, rooms[0]) : randomFloorIn(tiles, rng, null);
+  if (rooms.length) {
+    // стартуем из случайной крайней комнаты
+    const r = rng.chance(0.5) ? rooms.reduce((a, b) => (a.x < b.x ? a : b)) : rooms.reduce((a, b) => (a.x > b.x ? a : b));
+    start = randomFloorIn(tiles, rng, r) || start;
+  }
+  const d = bfsDistances(tiles, start.x, start.y);
+  let far = start, farD = -1;
+  for (let i = 0; i < d.length; i++) {
+    if (d[i] > farD && tiles[i] === T.FLOOR) { farD = d[i]; far = { x: i % MAP_W, y: (i / MAP_W) | 0 }; }
+  }
+  tiles[idx(start.x, start.y)] = T.UPSTAIRS;
+  tiles[idx(far.x, far.y)] = T.STAIRS;
+  return { tiles, rooms, start, stairs: far, theme };
+}
+
+// Все ли проходимые клетки достижимы со старта (для тестов и самопроверки)
+function levelConnected(tiles, start) {
+  const d = bfsDistances(tiles, start.x, start.y);
+  for (let i = 0; i < tiles.length; i++) if (isPassableTile(tiles[i]) && d[i] < 0) return false;
+  return true;
+}
+
+// ---- 03_fov.js ----
+// ===== Поле зрения (рекурсивное теневое сканирование) и поиск путей =====
+
+const FOV_OCTANTS = [
+  [1, 0, 0, 1], [0, 1, 1, 0], [0, -1, 1, 0], [-1, 0, 0, 1],
+  [-1, 0, 0, -1], [0, -1, -1, 0], [0, 1, -1, 0], [1, 0, 0, -1],
+];
+
+// opaque(x, y) -> bool; visit(x, y) вызывается для каждой видимой клетки
+function computeFOV(ox, oy, radius, opaque, visit) {
+  visit(ox, oy);
+  const r2 = radius * radius + radius;
+  for (const [xx, xy, yx, yy] of FOV_OCTANTS) {
+    const castLight = (row, start, end) => {
+      if (start < end) return;
+      let newStart = 0;
+      for (let j = row; j <= radius; j++) {
+        let blocked = false;
+        for (let dx = -j, dy = -j; dx <= 0; dx++) {
+          const lSlope = (dx - 0.5) / (dy + 0.5);
+          const rSlope = (dx + 0.5) / (dy - 0.5);
+          if (start < rSlope) continue;
+          if (end > lSlope) break;
+          const x = ox + dx * xx + dy * xy;
+          const y = oy + dx * yx + dy * yy;
+          if (!inBounds(x, y)) continue;
+          if (dx * dx + dy * dy <= r2) visit(x, y);
+          if (blocked) {
+            if (opaque(x, y)) { newStart = rSlope; continue; }
+            blocked = false;
+            start = newStart;
+          } else if (opaque(x, y) && j < radius) {
+            blocked = true;
+            castLight(j + 1, start, lSlope);
+            newStart = rSlope;
+          }
+        }
+        if (blocked) break;
+      }
+    };
+    castLight(1, 1.0, 0.0);
+  }
+}
+
+// Видна ли клетка b из a по прямой (для стрельбы и заклинаний)
+function clearLine(level, ax, ay, bx, by) {
+  const pts = lineBetween(ax, ay, bx, by);
+  for (let i = 1; i < pts.length - 1; i++) {
+    const t = level.tiles[idx(pts[i][0], pts[i][1])];
+    if (blocksSight(t) || t === T.WALL) return false;
+  }
+  return true;
+}
+
+// Карта Дейкстры: расстояние до цели для каждой клетки.
+// cost(x, y) -> число или Infinity (непроходимо)
+function dijkstraMap(goals, cost, maxDist = 60) {
+  const d = new Float32Array(MAP_W * MAP_H).fill(Infinity);
+  // Очередь с корзинами: стоимости маленькие целые, так быстрее кучи
+  const buckets = [];
+  for (const g of goals) {
+    d[idx(g.x, g.y)] = 0;
+    (buckets[0] ||= []).push(idx(g.x, g.y));
+  }
+  for (let b = 0; b < buckets.length && b <= maxDist; b++) {
+    const list = buckets[b];
+    if (!list) continue;
+    for (let k = 0; k < list.length; k++) {
+      const c = list[k];
+      if (d[c] < b) continue;
+      const cx = c % MAP_W, cy = (c / MAP_W) | 0;
+      for (const [dx, dy] of DIRS8) {
+        const nx = cx + dx, ny = cy + dy;
+        if (!inBounds(nx, ny)) continue;
+        const step = cost(nx, ny);
+        if (step === Infinity) continue;
+        const nd = b + step;
+        const n = idx(nx, ny);
+        if (nd < d[n]) {
+          d[n] = nd;
+          (buckets[nd] ||= []).push(n);
+        }
+      }
+    }
+  }
+  return d;
+}
+
+// Путь от (sx, sy) до цели по карте Дейкстры, построенной от цели
+function pathFrom(dmap, sx, sy, blocked) {
+  const path = [];
+  let x = sx, y = sy;
+  for (let guard = 0; guard < 200; guard++) {
+    const here = dmap[idx(x, y)];
+    if (here === 0) return path;
+    let best = null, bestV = here;
+    for (const [dx, dy] of DIRS8) {
+      const nx = x + dx, ny = y + dy;
+      if (!inBounds(nx, ny)) continue;
+      const v = dmap[idx(nx, ny)];
+      if (v < bestV && !(blocked && blocked(nx, ny) && v !== 0)) { bestV = v; best = [nx, ny]; }
+    }
+    if (!best) return path.length ? path : null;
+    path.push(best);
+    [x, y] = best;
+  }
+  return path;
+}
+
+// ---- 04_items.js ----
+// ===== Предметы: создание, названия, опознание =====
+
+function setupAppearances(g) {
+  const rng = g.rng;
+  const looks = rng.shuffle(POTION_LOOKS.map((_, i) => i));
+  g.looks = { potion: {}, scroll: {}, wand: {} };
+  Object.keys(POTIONS).forEach((k, i) => { g.looks.potion[k] = looks[i]; });
+  const usedNames = new Set();
+  for (const k of Object.keys(SCROLLS)) {
+    let name;
+    do {
+      const n = rng.int(2, 3);
+      const parts = [];
+      for (let i = 0; i < n; i++) parts.push(rng.pick(SCROLL_SYLLABLES));
+      name = parts.join('').toUpperCase();
+      if (rng.chance(0.5)) name += ' ' + rng.pick(SCROLL_SYLLABLES).toUpperCase() + rng.pick(SCROLL_SYLLABLES).toUpperCase();
+    } while (usedNames.has(name));
+    usedNames.add(name);
+    g.looks.scroll[k] = name;
+  }
+  const mats = rng.shuffle(WAND_LOOKS.slice());
+  Object.keys(WANDS).forEach((k, i) => { g.looks.wand[k] = mats[i]; });
+  g.known = { potion: {}, scroll: {}, wand: {} };
+}
+
+let ITEM_ID = 1;
+function makeItem(kind, type, extra = {}) {
+  const it = { id: ITEM_ID++, kind, type, qty: 1, ench: 0, ...extra };
+  if (kind === 'wand' && it.charges === undefined) it.charges = 0;
+  return it;
+}
+
+const STACKABLE = new Set(['potion', 'scroll', 'food', 'knife']);
+
+function isKnown(g, it) {
+  if (it.price) return true; // торговец честно подписывает товар
+  if (it.kind === 'potion' || it.kind === 'scroll' || it.kind === 'wand') return !!g.known[it.kind][it.type];
+  return true;
+}
+
+function itemName(g, it) {
+  const q = it.qty > 1 ? ` ×${it.qty}` : '';
+  const e = it.ench ? (it.ench > 0 ? ` +${it.ench}` : ` ${it.ench}`) : '';
+  switch (it.kind) {
+    case 'weapon': return WEAPONS[it.type].name + e;
+    case 'armor': return ARMORS[it.type].name + e;
+    case 'potion': {
+      if (isKnown(g, it)) return 'зелье ' + POTIONS[it.type].name + q;
+      return `${POTION_LOOKS[g.looks.potion[it.type]][0]} зелье` + q;
+    }
+    case 'scroll': {
+      if (isKnown(g, it)) return 'свиток ' + SCROLLS[it.type].name + q;
+      return `свиток «${g.looks.scroll[it.type]}»` + q;
+    }
+    case 'wand': {
+      if (isKnown(g, it)) return `палочка ${WANDS[it.type].name} [${it.charges}]`;
+      return `${g.looks.wand[it.type]} палочка`;
+    }
+    case 'food': return FOODS[it.type].name + q;
+    case 'knife': return 'метательный нож' + q;
+    case 'gold': return `${it.qty} ${plural(it.qty, 'монета', 'монеты', 'монет')}`;
+    case 'chest': return 'сундук';
+    default: return '???';
+  }
+}
+
+function itemSprite(g, it) {
+  switch (it.kind) {
+    case 'weapon': return WEAPONS[it.type].sprite;
+    case 'armor': return ARMORS[it.type].sprite;
+    case 'potion': return 'potion';
+    case 'scroll': return 'scroll';
+    case 'wand': return 'wand';
+    case 'food': return FOODS[it.type].sprite;
+    case 'knife': return 'knife';
+    case 'gold': return 'gold';
+    case 'chest': return 'chest';
+  }
+  return 'potion';
+}
+
+// Цвет предмета (для зелий — цвет жидкости)
+function itemTint(g, it) {
+  if (it.kind === 'potion') return POTION_LOOKS[g.looks.potion[it.type]][1];
+  return null;
+}
+
+function itemDesc(g, it) {
+  switch (it.kind) {
+    case 'weapon': {
+      const w = WEAPONS[it.type];
+      return `Урон ${w.dmg[0] + it.ench}–${w.dmg[1] + it.ench}, меткость ${w.accu + it.ench >= 0 ? '+' : ''}${w.accu + it.ench}.`;
+    }
+    case 'armor': {
+      const a = ARMORS[it.type];
+      return `Броня ${a.arm + it.ench}${a.eva ? `, уворот ${a.eva}` : ''}.`;
+    }
+    case 'potion': return isKnown(g, it) ? potionDesc(it.type) : 'Неизвестное зелье. Выпейте, чтобы узнать. Или бросьте во врага.';
+    case 'scroll': return isKnown(g, it) ? scrollDesc(it.type) : 'Неизвестный свиток. Прочтите, чтобы узнать.';
+    case 'wand': return isKnown(g, it) ? wandDesc(it.type) + ` Зарядов: ${it.charges}.` : 'Неизвестная палочка. Взмахните ею, чтобы узнать.';
+    case 'food': return it.type === 'sausage'
+      ? `Восстанавливает ${FOODS[it.type].heal} здоровья. Собаки от неё без ума.`
+      : `Восстанавливает ${FOODS[it.type].heal} здоровья. Бабушкин рецепт.`;
+    case 'knife': return 'Бросьте во врага: урон 2–6.';
+    default: return '';
+  }
+}
+
+function potionDesc(t) {
+  return {
+    heal: 'Лечит раны и снимает отравление.',
+    strength: 'Навсегда прибавляет силы.',
+    vision: 'Показывает всех существ и предметы на уровне.',
+    haste: 'Вы двигаетесь вдвое быстрее.',
+    regen: 'Раны затягиваются прямо на глазах.',
+    exp: 'Мгновенно даёт новый уровень.',
+    poison: 'Яд. Лучше бросить во врага.',
+    confuse: 'Путает мысли. Лучше бросить во врага.',
+  }[t];
+}
+function scrollDesc(t) {
+  return {
+    teleport: 'Переносит в случайное место уровня.',
+    mapping: 'Открывает карту уровня и ловушки.',
+    enchant: 'Улучшает оружие или броню на +1.',
+    identify: 'Раскрывает свойства предмета.',
+    fear: 'Враги в поле зрения в ужасе бегут.',
+    fire: 'Огненный взрыв вокруг вас. Вас не задевает.',
+    summon: 'Призывает монстров. Зачем такое писать?',
+  }[t];
+}
+function wandDesc(t) {
+  return {
+    bolt: 'Молния прошивает всех на линии.',
+    sleep: 'Усыпляет цель.',
+    slow: 'Замедляет цель.',
+    dig: 'Прорубает проход сквозь стены.',
+    blink: 'Мгновенно переносит вас в выбранном направлении.',
+  }[t];
+}
+
+// Случайный предмет для глубины
+function randomItem(g, depth) {
+  const rng = g.rng;
+  const kind = rng.weighted([
+    ['potion', 30], ['scroll', 24], ['weapon', 8], ['armor', 7], ['wand', 6], ['food', 10], ['knife', 6],
+  ]);
+  switch (kind) {
+    case 'potion': return makeItem('potion', rng.weighted(Object.entries(POTIONS).map(([k, v]) => [k, v.weight])));
+    case 'scroll': return makeItem('scroll', rng.weighted(Object.entries(SCROLLS).map(([k, v]) => [k, v.weight])));
+    case 'wand': {
+      const t = rng.weighted(Object.entries(WANDS).map(([k, v]) => [k, v.weight]));
+      return makeItem('wand', t, { charges: rng.int(...WANDS[t].charges) });
+    }
+    case 'food': return makeItem('food', rng.chance(0.55) ? 'pie' : 'sausage');
+    case 'knife': return makeItem('knife', 'knife', { qty: rng.int(3, 6) });
+    case 'weapon':
+    case 'armor': {
+      const table = kind === 'weapon' ? WEAPONS : ARMORS;
+      const opts = Object.entries(table).filter(([, v]) => v.depth <= depth + 1).map(([k, v]) => [k, 1 + v.depth]);
+      const t = rng.weighted(opts);
+      let ench = 0;
+      if (depth >= 3 && rng.chance(0.25)) ench = 1;
+      if (depth >= 6 && rng.chance(0.2)) ench++;
+      return makeItem(kind, t, { ench });
+    }
+  }
+}
+
+function itemPrice(g, it) {
+  let base = 20;
+  switch (it.kind) {
+    case 'weapon': base = WEAPONS[it.type].price + it.ench * 40; break;
+    case 'armor': base = ARMORS[it.type].price + it.ench * 40; break;
+    case 'potion': base = POTIONS[it.type].price; break;
+    case 'scroll': base = SCROLLS[it.type].price; break;
+    case 'wand': base = WANDS[it.type].price; break;
+    case 'food': base = FOODS[it.type].price; break;
+    case 'knife': base = 6 * it.qty; break;
+  }
+  return Math.round(base * (1 + g.depth * 0.06));
+}
+
+// ---- 05_game.js ----
+// ===== Игра: состояние, ходы, бой =====
+
+function newGame(seed) {
+  seed = (seed === undefined ? (Math.random() * 2 ** 32) >>> 0 : seed >>> 0);
+  ITEM_ID = 1;
+  const g = {
+    version: 1,
+    seed,
+    rng: makeRNG(seed),
+    depth: 0,
+    turn: 0,
+    nextId: 1,
+    actors: [],
+    items: [],
+    traps: [],
+    messages: [],
+    fx: [],
+    over: null,
+    stats: { kills: 0, goldFound: 0, potions: 0, scrolls: 0, deepest: 1, killedBy: null },
+    player: null,
+    level: null,
+  };
+  setupAppearances(g);
+  g.player = {
+    id: 0, type: 'player', x: 0, y: 0, hp: 24, maxHp: 24, energy: 100, speed: 100,
+    level: 1, xp: 0, str: 0, gold: 0, inv: [], weapon: null, armor: null, status: {},
+    regenClock: 0,
+  };
+  const dagger = makeItem('weapon', 'dagger');
+  const jacket = makeItem('armor', 'leather');
+  g.player.inv.push(dagger, jacket, makeItem('food', 'pie'), makeItem('potion', 'heal'));
+  g.player.weapon = dagger;
+  g.player.armor = jacket;
+  g.known.potion.heal = true; // бабушка дала с собой, подписала
+  enterLevel(g, 1);
+  msg(g, 'Барсик опять провалился в старый колодец. Придётся лезть за ним.', 'story');
+  msg(g, 'Стрелки или WASD — ходить. Тапните по клетке, чтобы пойти туда.', 'hint');
+  return g;
+}
+
+function msg(g, text, cls = 'info') {
+  g.messages.push({ text, cls, turn: g.turn });
+  if (g.messages.length > 120) g.messages.splice(0, g.messages.length - 120);
+}
+function fx(g, e) { g.fx.push(e); }
+
+// ---------- Уровни ----------
+
+function enterLevel(g, depth) {
+  g.depth = depth;
+  g.stats.deepest = Math.max(g.stats.deepest, depth);
+  const lv = generateLevel(depth, g.rng);
+  lv.seen = new Uint8Array(MAP_W * MAP_H);
+  lv.visible = new Uint8Array(MAP_W * MAP_H);
+  lv.detect = false;
+  g.level = lv;
+  g.actors = [];
+  g.items = [];
+  g.traps = [];
+  const p = g.player;
+  p.x = lv.start.x; p.y = lv.start.y;
+  p.energy = 100;
+  populate(g);
+  updateFOV(g);
+  const th = THEMES[lv.theme];
+  if (depth === MAX_DEPTH) {
+    msg(g, `Глубина ${depth}. ${th.name}.`, 'depth');
+    msg(g, th.ambient, 'story');
+  } else {
+    msg(g, `Глубина ${depth}. ${th.name}.`, 'depth');
+    msg(g, depth === 1 ? th.ambient : CAT_HINTS[(depth - 2 + g.seed) % CAT_HINTS.length], 'story');
+  }
+  fx(g, { type: 'sound', name: 'descend' });
+  fx(g, { type: 'levelin' });
+}
+
+function occupied(g, x, y) {
+  if (g.player.x === x && g.player.y === y) return true;
+  return g.actors.some((a) => a.x === x && a.y === y);
+}
+function actorAt(g, x, y) {
+  if (g.player.x === x && g.player.y === y) return g.player;
+  for (const a of g.actors) if (a.x === x && a.y === y) return a;
+  return null;
+}
+function itemAt(g, x, y) {
+  for (const it of g.items) if (it.x === x && it.y === y) return it;
+  return null;
+}
+function trapAt(g, x, y) {
+  for (const t of g.traps) if (t.x === x && t.y === y) return t;
+  return null;
+}
+
+function spawnMonster(g, type, x, y, opts = {}) {
+  const def = MONSTERS[type];
+  // Монстры чуть крепче, если встречаются глубже своей «родной» глубины
+  const over = Math.max(0, g.depth - def.depth[0]);
+  const hp = def.boss || def.peaceful ? def.hp : Math.round(def.hp * (1 + over * 0.12));
+  const m = {
+    id: g.nextId++, type, x, y, hp, maxHp: hp, energy: g.rng.int(0, 99), speed: def.speed,
+    awake: !!opts.awake, status: {}, lastSeen: null, wander: null, cooldown: 0, cooldown2: 6,
+    gold: 0, disguised: def.ai === 'mimic', summons: 0, owner: opts.owner || 0,
+  };
+  g.actors.push(m);
+  return m;
+}
+
+function freeFloor(g, room, avoidNear) {
+  const tiles = g.level.tiles;
+  for (let t = 0; t < 300; t++) {
+    const p = randomFloorIn(tiles, g.rng, room);
+    if (!p) continue;
+    if (occupied(g, p.x, p.y) || itemAt(g, p.x, p.y) || trapAt(g, p.x, p.y)) continue;
+    if (avoidNear && dist(p, g.player) < avoidNear) continue;
+    return p;
+  }
+  return null;
+}
+
+function pickMonsterType(g, depth) {
+  const opts = Object.entries(MONSTERS)
+    .filter(([, d]) => d.weight > 0 && depth >= d.depth[0] && depth <= d.depth[1])
+    .map(([k, d]) => [k, d.weight]);
+  return g.rng.weighted(opts);
+}
+
+function populate(g) {
+  const rng = g.rng, depth = g.depth, lv = g.level;
+  if (depth === MAX_DEPTH) return populateLair(g);
+
+  // Магазин
+  let shopRoom = null;
+  if ((depth === 3 || depth === 6 || depth === 9) && lv.rooms.length > 2) {
+    const cands = lv.rooms.filter((r) => !inRoom(r, lv.start.x, lv.start.y) && !inRoom(r, lv.stairs.x, lv.stairs.y) && r.w >= 5 && r.h >= 3);
+    if (cands.length) {
+      shopRoom = rng.pick(cands);
+      lv.shop = shopRoom;
+      for (let y = shopRoom.y; y < shopRoom.y + shopRoom.h; y++)
+        for (let x = shopRoom.x; x < shopRoom.x + shopRoom.w; x++)
+          if (lv.tiles[idx(x, y)] !== T.FLOOR) lv.tiles[idx(x, y)] = T.FLOOR;
+      const c = roomCenter(shopRoom);
+      spawnMonster(g, 'merchant', c.x, shopRoom.y);
+      const wares = [
+        makeItem('potion', 'heal'), makeItem('potion', 'heal'),
+        randomItem(g, depth + 2), randomItem(g, depth + 2), randomItem(g, depth + 1),
+        makeItem('scroll', rng.pick(['enchant', 'teleport', 'mapping'])),
+        rng.chance(0.5) ? makeItem('weapon', rng.pick(Object.keys(WEAPONS).filter((k) => WEAPONS[k].depth <= depth + 2)), { ench: 1 })
+          : makeItem('armor', rng.pick(Object.keys(ARMORS).filter((k) => ARMORS[k].depth <= depth + 2)), { ench: 1 }),
+      ];
+      for (const w of wares) {
+        const p = freeFloor(g, { x: shopRoom.x, y: shopRoom.y + 1, w: shopRoom.w, h: Math.max(1, shopRoom.h - 1) });
+        if (!p) break;
+        w.x = p.x; w.y = p.y; w.price = itemPrice(g, w);
+        g.items.push(w);
+      }
+    }
+  }
+  const notShop = (x, y) => shopRoom && inRoom(shopRoom, x, y);
+  const pickRoom = () => (lv.rooms.length ? rng.pick(lv.rooms.filter((r) => r !== shopRoom)) : null);
+  const placeFree = (avoidNear) => {
+    for (let t = 0; t < 20; t++) {
+      const p = freeFloor(g, pickRoom(), avoidNear);
+      if (p && !notShop(p.x, p.y)) return p;
+    }
+    return null;
+  };
+
+  // Монстры
+  const nMon = 4 + Math.floor(depth * 1.1) + rng.int(0, 3);
+  for (let i = 0; i < nMon; i++) {
+    const p = placeFree(7);
+    if (!p) continue;
+    const type = pickMonsterType(g, depth);
+    const m = spawnMonster(g, type, p.x, p.y, { awake: rng.chance(0.25) });
+    // Иногда приходят стаями
+    if ((type === 'rat' || type === 'kobold' || type === 'skeleton') && rng.chance(0.3)) {
+      for (const [dx, dy] of DIRS8) {
+        const nx = m.x + dx, ny = m.y + dy;
+        if (lv.tiles[idx(nx, ny)] === T.FLOOR && !occupied(g, nx, ny) && rng.chance(0.4)) spawnMonster(g, type, nx, ny);
+      }
+    }
+  }
+  // Предметы
+  const nItems = rng.int(4, 7);
+  for (let i = 0; i < nItems; i++) {
+    const p = placeFree();
+    if (!p) continue;
+    const it = randomItem(g, depth);
+    it.x = p.x; it.y = p.y;
+    g.items.push(it);
+  }
+  // Золото
+  const nGold = rng.int(2, 4);
+  for (let i = 0; i < nGold; i++) {
+    const p = placeFree();
+    if (!p) continue;
+    g.items.push(makeItem('gold', 'gold', { qty: rng.int(4, 10) + depth * rng.int(2, 5), x: p.x, y: p.y }));
+  }
+  // Сундуки и мимики
+  if (rng.chance(0.55)) {
+    const p = placeFree(4);
+    if (p) {
+      if (depth >= 4 && rng.chance(0.35)) spawnMonster(g, 'mimic', p.x, p.y);
+      else g.items.push(makeItem('chest', 'chest', { x: p.x, y: p.y }));
+    }
+  }
+  // Ловушки
+  const nTraps = rng.int(0, 1 + Math.floor(depth / 2));
+  for (let i = 0; i < nTraps; i++) {
+    const p = freeFloor(g, null, 3);
+    if (!p || notShop(p.x, p.y)) continue;
+    const type = rng.weighted([['spike', 4], ['teleport', 2], ['alarm', 2], ['gas', depth >= 3 ? 2 : 0]]);
+    g.traps.push({ x: p.x, y: p.y, type, hidden: true });
+  }
+}
+
+function populateLair(g) {
+  const lv = g.level;
+  const dog = spawnMonster(g, 'dog', 24, 9);
+  dog.awake = false;
+  spawnMonster(g, 'cat', lv.cat.x, lv.cat.y);
+  // Припасы в кладовках
+  for (const r of [lv.rooms[2], lv.rooms[3]]) {
+    for (let i = 0; i < 2; i++) {
+      const p = freeFloor(g, r);
+      if (!p) continue;
+      const it = randomItem(g, g.depth);
+      it.x = p.x; it.y = p.y;
+      g.items.push(it);
+    }
+  }
+  const p = freeFloor(g, lv.rooms[2]);
+  if (p) g.items.push(makeItem('food', 'sausage', { x: p.x, y: p.y, qty: 2 }));
+  const q = freeFloor(g, lv.rooms[3]);
+  if (q) g.items.push(makeItem('potion', 'heal', { x: q.x, y: q.y }));
+  // Пара охранников по пути
+  for (let i = 0; i < 2; i++) {
+    const s = freeFloor(g, lv.arena, 6);
+    if (s) spawnMonster(g, i ? 'skeleton' : 'shade', s.x, s.y);
+  }
+}
+
+// ---------- Поле зрения ----------
+
+function updateFOV(g) {
+  const lv = g.level;
+  lv.visible.fill(0);
+  const p = g.player;
+  computeFOV(p.x, p.y, FOV_RADIUS, (x, y) => blocksSight(lv.tiles[idx(x, y)]), (x, y) => {
+    lv.visible[idx(x, y)] = 1;
+    lv.seen[idx(x, y)] = 1;
+  });
+}
+
+function canSee(g, x, y) { return !!g.level.visible[idx(x, y)]; }
+
+// Видит ли игрок этого монстра (с учётом невидимок и мимиков)
+function monsterVisible(g, m) {
+  if (g.level.detect && !MONSTERS[m.type].stealth) return true;
+  if (!canSee(g, m.x, m.y)) return false;
+  if (MONSTERS[m.type].stealth && dist(m, g.player) > 2) return false;
+  return true;
+}
+
+// ---------- Характеристики ----------
+
+function playerAccuracy(g) {
+  const p = g.player, w = p.weapon;
+  return 10 + p.level + (w ? WEAPONS[w.type].accu + w.ench : 0) - (p.status.confused ? 4 : 0);
+}
+function playerDamage(g) {
+  const p = g.player, w = p.weapon;
+  if (!w) return [1 + p.str, 2 + p.str];
+  const d = WEAPONS[w.type].dmg;
+  return [d[0] + w.ench + p.str, d[1] + w.ench + p.str];
+}
+function playerEvasion(g) {
+  const p = g.player, a = p.armor;
+  return 5 + Math.floor(p.level / 2) + (a ? ARMORS[a.type].eva : 0) + (p.status.haste ? 3 : 0);
+}
+function playerArmor(g) {
+  const a = g.player.armor;
+  return a ? ARMORS[a.type].arm + a.ench : 0;
+}
+function xpToNext(level) { return 10 * level + 5 * level * level; }
+
+function statsOf(g, a) {
+  if (a === g.player) return { accu: playerAccuracy(g), eva: playerEvasion(g), arm: playerArmor(g), dmg: playerDamage(g) };
+  const d = MONSTERS[a.type];
+  const over = Math.max(0, g.depth - d.depth[0]);
+  return {
+    accu: d.accu + Math.floor(over / 2) - (a.status.confused ? 4 : 0),
+    eva: d.eva + (a.status.sleep ? -100 : 0),
+    arm: d.arm,
+    dmg: [d.dmg[0] + Math.floor(over / 3), d.dmg[1] + Math.floor(over / 2)],
+  };
+}
+
+function nameOf(g, a) { return a === g.player ? 'вы' : MONSTERS[a.type].name; }
+
+// ---------- Бой ----------
+
+function attack(g, att, def, opts = {}) {
+  const rng = g.rng;
+  const A = statsOf(g, att), D = statsOf(g, def);
+  const pHit = clamp(A.accu / (A.accu + Math.max(0, D.eva)), 0.15, 0.97);
+  const isPlayer = att === g.player;
+  const ranged = !!opts.ranged;
+  fx(g, { type: ranged ? 'shot' : 'bump', id: att.id, x: att.x, y: att.y, tx: def.x, ty: def.y, color: opts.color });
+  const sneak = def !== g.player && (!def.awake || def.status.sleep > 0);
+  if (def.status.sleep) def.status.sleep = 0;
+  if (rng.next() > pHit) {
+    if (isPlayer) msg(g, `Промах! ${capitalize(MONSTERS[def.type].name)} уворачивается.`, 'miss');
+    else if (def === g.player) msg(g, `${capitalize(MONSTERS[att.type].name)} промахивается.`, 'miss');
+    fx(g, { type: 'float', x: def.x, y: def.y, text: 'мимо', color: '#9aa' });
+    fx(g, { type: 'sound', name: 'miss' });
+    wake(g, def);
+    return false;
+  }
+  let dmg = opts.dmg ? rng.int(opts.dmg[0], opts.dmg[1]) : rng.int(A.dmg[0], A.dmg[1]);
+  let crit = false;
+  if (isPlayer && sneak) { dmg = Math.round(dmg * 1.5); crit = true; }
+  if (isPlayer && rng.chance(0.07)) { dmg = Math.round(dmg * 1.6); crit = true; }
+  const block = rng.int(0, D.arm);
+  dmg = Math.max(0, dmg - block);
+  if (isPlayer) {
+    const n = MONSTERS[def.type].acc;
+    if (dmg === 0) msg(g, `Вы бьёте ${n}, но удар не пробивает защиту.`, 'miss');
+    else msg(g, `${crit ? 'Сильный удар! ' : ''}Вы бьёте ${n}.`, 'hit');
+  } else if (def === g.player) {
+    const d = MONSTERS[att.type];
+    if (dmg === 0) msg(g, `${capitalize(d.name)} ${d.verb} вас, но броня выдерживает.`, 'miss');
+    else msg(g, `${capitalize(d.name)} ${d.verb} вас.`, 'bad');
+  }
+  wake(g, def);
+  damage(g, def, dmg, att, crit);
+  // Особые эффекты укусов
+  if (!isPlayer && def === g.player && dmg > 0 && MONSTERS[att.type].poison && rng.chance(MONSTERS[att.type].poison) && !g.over) {
+    def.status.poison = (def.status.poison || 0) + rng.int(3, 6);
+    msg(g, 'Вы отравлены!', 'bad');
+  }
+  return true;
+}
+
+function wake(g, a) {
+  if (a === g.player) return;
+  if (!a.awake) a.awake = true;
+  a.lastSeen = { x: g.player.x, y: g.player.y };
+}
+
+function damage(g, a, amount, source, crit) {
+  if (amount <= 0) {
+    fx(g, { type: 'float', x: a.x, y: a.y, text: '0', color: '#9aa' });
+    return;
+  }
+  a.hp -= amount;
+  fx(g, { type: 'float', x: a.x, y: a.y, text: String(amount), color: a === g.player ? '#ff6b5e' : crit ? '#ffd34e' : '#fff' , big: crit });
+  fx(g, { type: 'flash', id: a.id });
+  fx(g, { type: 'sound', name: a === g.player ? 'hurt' : 'hit' });
+  if (a === g.player) {
+    fx(g, { type: 'shake', power: Math.min(6, 1 + amount / 3) });
+    if (a.hp <= 0) {
+      a.hp = 0;
+      const cause = source && source !== a && source.type ? MONSTERS[source.type].name : (typeof source === 'string' ? source : 'несчастный случай');
+      gameOver(g, false, cause);
+    }
+    return;
+  }
+  // Слизь делится
+  const def = MONSTERS[a.type];
+  if (def.splits && a.hp > 0 && a.hp >= 4) {
+    for (const [dx, dy] of g.rng.shuffle(DIRS8.slice())) {
+      const nx = a.x + dx, ny = a.y + dy;
+      if (isPassableTile(g.level.tiles[idx(nx, ny)]) && !occupied(g, nx, ny)) {
+        const half = Math.floor(a.hp / 2);
+        a.hp -= half;
+        const s = spawnMonster(g, 'slime', nx, ny, { awake: true });
+        s.hp = half; s.maxHp = half;
+        if (canSee(g, nx, ny)) msg(g, 'Слизь делится надвое!', 'info');
+        break;
+      }
+    }
+  }
+  if (a.hp <= 0) killMonster(g, a, source);
+}
+
+function killMonster(g, m, source) {
+  const def = MONSTERS[m.type];
+  if (def.boss) return defeatBoss(g, m);
+  g.actors = g.actors.filter((a) => a !== m);
+  const vis = canSee(g, m.x, m.y);
+  if (vis) msg(g, `${capitalize(def.name)} ${def.death || 'погибает'}.`, 'kill');
+  fx(g, { type: 'death', x: m.x, y: m.y, sprite: def.sprite });
+  fx(g, { type: 'sound', name: 'kill' });
+  if (m.gold > 0) dropItem(g, makeItem('gold', 'gold', { qty: m.gold }), m.x, m.y);
+  if (m.type === 'mimic') {
+    for (let i = 0; i < 2; i++) dropItem(g, randomItem(g, g.depth + 1), m.x, m.y);
+  }
+  if (source === g.player || (source && source.byPlayer)) {
+    g.stats.kills++;
+    gainXP(g, def.xp + Math.floor(def.xp * Math.max(0, g.depth - def.depth[0]) * 0.1));
+  }
+  // Миньоны некроманта рассыпаются вместе с ним
+  if (m.type === 'necro') {
+    for (const a of g.actors.slice()) if (a.owner === m.id) {
+      g.actors = g.actors.filter((x) => x !== a);
+      fx(g, { type: 'death', x: a.x, y: a.y, sprite: MONSTERS[a.type].sprite });
+      if (canSee(g, a.x, a.y)) msg(g, 'Поднятый скелет рассыпается.', 'kill');
+    }
+  }
+}
+
+function defeatBoss(g, dog) {
+  g.actors = g.actors.filter((a) => a !== dog && a.type !== 'puppy');
+  msg(g, 'Древний Пёс скулит, съёживается и превращается в лохматого щенка.', 'boss');
+  msg(g, 'Щенок виляет хвостом и убегает. Решётка клетки со скрипом поднимается!', 'boss');
+  fx(g, { type: 'death', x: dog.x, y: dog.y, sprite: 'dog', big: true });
+  fx(g, { type: 'shake', power: 8 });
+  fx(g, { type: 'sound', name: 'victory' });
+  const c = g.level.cat;
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++)
+      if (g.level.tiles[idx(c.x + dx, c.y + dy)] === T.BARS) g.level.tiles[idx(c.x + dx, c.y + dy)] = T.FLOOR;
+  g.level.cageOpen = true;
+  g.stats.kills++;
+  gainXP(g, 50);
+  updateFOV(g);
+}
+
+function gainXP(g, n) {
+  const p = g.player;
+  p.xp += n;
+  while (p.xp >= xpToNext(p.level)) {
+    p.xp -= xpToNext(p.level);
+    levelUp(g);
+  }
+}
+
+function levelUp(g) {
+  const p = g.player;
+  p.level++;
+  const hp = 4 + g.rng.int(0, 2);
+  p.maxHp += hp;
+  p.hp = Math.min(p.maxHp, p.hp + hp + Math.round(p.maxHp * 0.2));
+  let extra = '';
+  if (p.level % 2 === 1) { p.str++; extra = ', сила +1'; }
+  msg(g, `Новый уровень: ${p.level}! Здоровье +${hp}${extra}.`, 'good');
+  fx(g, { type: 'levelup', x: p.x, y: p.y });
+  fx(g, { type: 'sound', name: 'levelup' });
+}
+
+function gameOver(g, won, cause) {
+  if (g.over) return;
+  g.over = { won, cause, turn: g.turn, depth: g.depth, score: computeScore(g, won) };
+  g.stats.killedBy = cause;
+  if (won) {
+    msg(g, 'Барсик трётся о ваши ноги и громко мурчит. Пора домой!', 'boss');
+  } else {
+    msg(g, `Вы погибли. Причина: ${cause}.`, 'bad');
+    fx(g, { type: 'sound', name: 'death' });
+  }
+}
+
+function computeScore(g, won) {
+  return g.player.gold + g.stats.deepest * 150 + g.stats.kills * 10 + g.player.level * 25 + (won ? 3000 - Math.min(2000, Math.floor(g.turn / 2)) : 0);
+}
+
+// ---------- Предметы на полу ----------
+
+function dropItem(g, it, x, y) {
+  // Ищем ближайшую свободную клетку по спирали
+  for (let r = 0; r < 6; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const nx = x + dx, ny = y + dy;
+        if (!inBounds(nx, ny)) continue;
+        const t = g.level.tiles[idx(nx, ny)];
+        if (!(t === T.FLOOR || t === T.GRASS || t === T.WATER || t === T.ODOOR)) continue;
+        const other = itemAt(g, nx, ny);
+        if (other) {
+          if (other.kind === 'gold' && it.kind === 'gold') { other.qty += it.qty; return true; }
+          continue;
+        }
+        it.x = nx; it.y = ny;
+        g.items.push(it);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function addToInventory(g, it) {
+  const p = g.player;
+  if (STACKABLE.has(it.kind)) {
+    const same = p.inv.find((o) => o.kind === it.kind && o.type === it.type);
+    if (same) { same.qty += it.qty; return true; }
+  }
+  if (p.inv.length >= INV_SIZE) return false;
+  delete it.x; delete it.y;
+  p.inv.push(it);
+  return true;
+}
+
+function removeOne(g, it) {
+  const p = g.player;
+  if (it.qty > 1) { it.qty--; const one = { ...it, id: ITEM_ID++, qty: 1 }; return one; }
+  p.inv = p.inv.filter((o) => o !== it);
+  if (p.weapon === it) p.weapon = null;
+  if (p.armor === it) p.armor = null;
+  return it;
+}
+
+// Подобрать предмет под ногами. buy=true — согласие купить в магазине
+function pickUp(g, buy) {
+  const p = g.player;
+  const it = itemAt(g, p.x, p.y);
+  if (!it || it.kind === 'chest') return false;
+  if (it.kind === 'gold') {
+    p.gold += it.qty; g.stats.goldFound += it.qty;
+    g.items = g.items.filter((o) => o !== it);
+    msg(g, `Вы подбираете ${itemName(g, it)}.`, 'loot');
+    fx(g, { type: 'sound', name: 'coin' });
+    fx(g, { type: 'float', x: p.x, y: p.y, text: `+${it.qty}`, color: '#ffd34e' });
+    return true;
+  }
+  if (it.price) {
+    if (!buy) {
+      msg(g, `${capitalize(itemName(g, it))} — ${it.price} ${plural(it.price, 'монета', 'монеты', 'монет')}. Нажмите «Взять», чтобы купить.`, 'shop');
+      return false;
+    }
+    if (p.gold < it.price) {
+      msg(g, `Торговец качает головой: не хватает ${it.price - p.gold} ${plural(it.price - p.gold, 'монеты', 'монет', 'монет')}.`, 'shop');
+      return false;
+    }
+    if (p.inv.length >= INV_SIZE && !(STACKABLE.has(it.kind) && p.inv.some((o) => o.kind === it.kind && o.type === it.type))) {
+      msg(g, 'Рюкзак полон.', 'info');
+      return false;
+    }
+    p.gold -= it.price;
+    const price = it.price;
+    delete it.price;
+    if (g.known[it.kind]) g.known[it.kind][it.type] = true;
+    g.items = g.items.filter((o) => o !== it);
+    addToInventory(g, it);
+    msg(g, `Куплено: ${itemName(g, it)} за ${price}. «Приходите ещё!»`, 'shop');
+    fx(g, { type: 'sound', name: 'coin' });
+    return true;
+  }
+  if (!addToInventory(g, it)) {
+    msg(g, `Здесь лежит: ${itemName(g, it)}. Рюкзак полон.`, 'info');
+    return false;
+  }
+  delete it.dropped;
+  g.items = g.items.filter((o) => o !== it);
+  msg(g, `Вы нашли: ${itemName(g, it)}.`, 'loot');
+  fx(g, { type: 'sound', name: 'pickup' });
+  return true;
+}
+
+function openChest(g, chest) {
+  g.items = g.items.filter((o) => o !== chest);
+  msg(g, 'Вы открываете сундук.', 'loot');
+  fx(g, { type: 'sound', name: 'chest' });
+  fx(g, { type: 'particles', x: chest.x, y: chest.y, color: '#ffd34e', n: 14 });
+  const n = g.rng.int(2, 3);
+  for (let i = 0; i < n; i++) dropItem(g, randomItem(g, g.depth + 1), chest.x, chest.y);
+  dropItem(g, makeItem('gold', 'gold', { qty: g.rng.int(10, 25) + g.depth * 4 }), chest.x, chest.y);
+}
+
+// ---------- Действия игрока ----------
+// Каждое действие возвращает true, если потрачен ход
+
+function playerMove(g, dx, dy) {
+  if (g.over) return false;
+  const p = g.player;
+  if (p.status.confused && g.rng.chance(0.5)) {
+    [dx, dy] = g.rng.pick(DIRS8);
+  }
+  const nx = p.x + dx, ny = p.y + dy;
+  if (!inBounds(nx, ny)) return false;
+  const target = actorAt(g, nx, ny);
+  if (target && target !== p) {
+    const def = MONSTERS[target.type];
+    if (target.type === 'merchant') {
+      msg(g, g.rng.pick(['Торговец: «Смотрите, не стесняйтесь».', 'Торговец: «Всё по честной цене!»', 'Торговец: «Кота не видел. Но видел собаку. Большую.»']), 'shop');
+      return endTurn(g);
+    }
+    if (target.type === 'cat') {
+      if (g.level.cageOpen) {
+        msg(g, 'Вы берёте Барсика на руки.', 'boss');
+        gameOver(g, true, null);
+        fx(g, { type: 'sound', name: 'meow' });
+        return true;
+      }
+      msg(g, 'Барсик за решёткой. Сначала разберитесь с Псом.', 'info');
+      return false;
+    }
+    if (target.disguised) revealMimic(g, target);
+    attack(g, p, target);
+    return endTurn(g);
+  }
+  const t = g.level.tiles[idx(nx, ny)];
+  if (t === T.DOOR) {
+    g.level.tiles[idx(nx, ny)] = T.ODOOR;
+    fx(g, { type: 'sound', name: 'door' });
+    return endTurn(g);
+  }
+  if (t === T.BARS) {
+    msg(g, 'Прочная решётка. Сквозь неё виден Барсик.', 'info');
+    return false;
+  }
+  if (!isPassableTile(t)) return false;
+  const chest = itemAt(g, nx, ny);
+  if (chest && chest.kind === 'chest') {
+    openChest(g, chest);
+    return endTurn(g);
+  }
+  p.x = nx; p.y = ny;
+  fx(g, { type: 'move', id: 0 });
+  if (t === T.GRASS) g.level.tiles[idx(nx, ny)] = T.FLOOR; // примяли траву
+  if (t === T.WATER && p.status.burning) { p.status.burning = 0; msg(g, 'Вода гасит огонь.', 'good'); }
+  const trap = trapAt(g, nx, ny);
+  if (trap) triggerTrap(g, trap);
+  const it = itemAt(g, nx, ny);
+  if (it && !g.over) {
+    if (it.dropped) msg(g, `Здесь лежит: ${itemName(g, it)}.`, 'info');
+    else pickUp(g, false); // в магазине только покажет цену
+  }
+  if (t === T.STAIRS && !g.over) msg(g, 'Здесь лестница вниз. Нажмите «Вниз» или >.', 'hint');
+  return endTurn(g);
+}
+
+function revealMimic(g, m) {
+  m.disguised = false;
+  m.awake = true;
+  msg(g, 'Сундук распахивает пасть! Это мимик!', 'bad');
+  fx(g, { type: 'shake', power: 4 });
+  fx(g, { type: 'sound', name: 'roar' });
+}
+
+function playerWait(g) {
+  if (g.over) return false;
+  // Ожидание заодно и осмотр: шанс заметить ловушки рядом
+  for (const t of g.traps) {
+    if (t.hidden && dist(t, g.player) <= 1 && g.rng.chance(0.35)) {
+      t.hidden = false;
+      msg(g, `Вы замечаете ловушку: ${trapName(t.type)}.`, 'info');
+    }
+  }
+  return endTurn(g);
+}
+
+function playerDescend(g) {
+  if (g.over) return false;
+  const p = g.player;
+  if (g.level.tiles[idx(p.x, p.y)] !== T.STAIRS) {
+    msg(g, 'Лестницы здесь нет.', 'info');
+    return false;
+  }
+  enterLevel(g, g.depth + 1);
+  return true;
+}
+
+function playerPickup(g) {
+  if (g.over) return false;
+  const it = itemAt(g, g.player.x, g.player.y);
+  if (!it) { msg(g, 'Здесь ничего нет.', 'info'); return false; }
+  if (pickUp(g, true)) return endTurn(g);
+  return false;
+}
+
+// ---------- Ловушки ----------
+
+function trapName(type) {
+  return { spike: 'шипы', teleport: 'телепорт', alarm: 'сигнализация', gas: 'ядовитый газ' }[type];
+}
+
+function triggerTrap(g, trap) {
+  const p = g.player;
+  trap.hidden = false;
+  fx(g, { type: 'sound', name: 'trap' });
+  switch (trap.type) {
+    case 'spike': {
+      const d = g.rng.int(2, 4) + Math.floor(g.depth / 2);
+      msg(g, 'Из пола выскакивают шипы!', 'bad');
+      damage(g, p, d, 'шипы');
+      break;
+    }
+    case 'teleport':
+      msg(g, 'Пол вспыхивает, и вас куда-то переносит!', 'info');
+      teleportPlayer(g);
+      break;
+    case 'alarm':
+      msg(g, 'Раздаётся оглушительный звон! Все монстры знают, где вы.', 'bad');
+      for (const a of g.actors) if (!MONSTERS[a.type].peaceful) { a.awake = true; a.lastSeen = { x: p.x, y: p.y }; }
+      fx(g, { type: 'shake', power: 3 });
+      break;
+    case 'gas':
+      msg(g, 'Из щелей валит зелёный газ. Голова кружится.', 'bad');
+      p.status.confused = (p.status.confused || 0) + g.rng.int(4, 7);
+      fx(g, { type: 'particles', x: p.x, y: p.y, color: '#7cd36a', n: 20 });
+      break;
+  }
+}
+
+function teleportPlayer(g) {
+  const p = g.player;
+  for (let t = 0; t < 400; t++) {
+    const x = g.rng.int(1, MAP_W - 2), y = g.rng.int(1, MAP_H - 2);
+    const tt = g.level.tiles[idx(x, y)];
+    if (tt !== T.FLOOR || occupied(g, x, y) || trapAt(g, x, y)) continue;
+    if (g.actors.some((a) => !MONSTERS[a.type].peaceful && dist(a, { x, y }) < 5)) continue;
+    fx(g, { type: 'particles', x: p.x, y: p.y, color: '#a98bff', n: 16 });
+    p.x = x; p.y = y;
+    fx(g, { type: 'teleport', id: 0 });
+    fx(g, { type: 'particles', x, y, color: '#a98bff', n: 16 });
+    updateFOV(g);
+    return true;
+  }
+  return false;
+}
+
+// ---------- Ход мира ----------
+
+function effSpeed(a) {
+  let s = a.speed;
+  if (a.status.haste) s *= 2;
+  if (a.status.slow) s = Math.floor(s / 2);
+  return s;
+}
+
+function endTurn(g) {
+  const p = g.player;
+  p.energy -= 100;
+  if (g.over) { updateFOV(g); return true; }
+  if (p.energy >= 100) { updateFOV(g); return true; } // ускорение: ходим ещё раз
+  let guard = 0;
+  while (p.energy < 100 && !g.over && guard++ < 50) {
+    worldTick(g);
+    p.energy += effSpeed(p);
+    for (const a of g.actors.slice()) {
+      if (g.over) break;
+      if (!g.actors.includes(a)) continue;
+      a.energy += effSpeed(a);
+      while (a.energy >= 100 && g.actors.includes(a) && !g.over) {
+        a.energy -= 100;
+        monsterAct(g, a);
+      }
+    }
+  }
+  updateFOV(g);
+  return true;
+}
+
+// Раз в ход: статусы, регенерация
+function worldTick(g) {
+  g.turn++;
+  const p = g.player;
+  tickStatus(g, p);
+  // Естественное восстановление
+  p.regenClock++;
+  const every = Math.max(6, 18 - p.level);
+  if (p.regenClock >= every) {
+    p.regenClock = 0;
+    if (p.hp < p.maxHp && !p.status.poison) p.hp++;
+  }
+  for (const a of g.actors.slice()) tickStatus(g, a);
+  computePlayerMaps(g);
+}
+
+function tickStatus(g, a) {
+  const s = a.status;
+  if (s.poison) {
+    s.poison--;
+    if (a === g.player) damage(g, a, 1, 'яд');
+    else { a.hp -= 1; fx(g, { type: 'float', x: a.x, y: a.y, text: '1', color: '#7cd36a' }); if (a.hp <= 0) killMonster(g, a, { byPlayer: true }); }
+    if (s.poison <= 0 && a === g.player) msg(g, 'Яд больше не действует.', 'good');
+  }
+  if (s.regen) { s.regen--; if (a.hp < a.maxHp) a.hp = Math.min(a.maxHp, a.hp + 1); }
+  for (const k of ['confused', 'haste', 'slow', 'fear', 'sleep', 'distracted']) {
+    if (s[k]) {
+      s[k]--;
+      if (!s[k] && a === g.player) {
+        const t = { confused: 'Голова прояснилась.', haste: 'Вы снова двигаетесь с обычной скоростью.' }[k];
+        if (t) msg(g, t, 'info');
+      }
+    }
+  }
+}
+
+// Карты Дейкстры для преследования игрока (общие для всех монстров)
+function computePlayerMaps(g) {
+  const lv = g.level, p = g.player;
+  const walk = (x, y) => {
+    const t = lv.tiles[idx(x, y)];
+    return isPassableTile(t) ? 1 : Infinity;
+  };
+  g._chase = dijkstraMap([{ x: p.x, y: p.y }], walk, 40);
+  if (g.actors.some((a) => MONSTERS[a.type].phase)) {
+    g._phase = dijkstraMap([{ x: p.x, y: p.y }], (x, y) => (x > 0 && y > 0 && x < MAP_W - 1 && y < MAP_H - 1 && lv.tiles[idx(x, y)] !== T.BARS ? 1 : Infinity), 30);
+  } else g._phase = null;
+}
+
+// ---- 06_ai.js ----
+// ===== Поведение монстров =====
+
+function monsterCanEnter(g, m, x, y) {
+  if (!inBounds(x, y)) return false;
+  if (occupied(g, x, y)) return false;
+  const t = g.level.tiles[idx(x, y)];
+  if (MONSTERS[m.type].phase) return t !== T.BARS && x > 0 && y > 0 && x < MAP_W - 1 && y < MAP_H - 1;
+  if (!isPassableTile(t)) return false;
+  const it = itemAt(g, x, y);
+  if (it && it.kind === 'chest') return false;
+  return true;
+}
+
+function moveMonster(g, m, x, y) {
+  const t = g.level.tiles[idx(x, y)];
+  if (t === T.DOOR && !MONSTERS[m.type].phase) {
+    g.level.tiles[idx(x, y)] = T.ODOOR; // открыл дверь — на это ушёл ход
+    return;
+  }
+  m.x = x; m.y = y;
+  if (t === T.GRASS && !MONSTERS[m.type].phase && g.rng.chance(0.3)) g.level.tiles[idx(x, y)] = T.FLOOR;
+}
+
+// Шаг по карте расстояний: dir = +1 к игроку, -1 от игрока
+function stepByMap(g, m, map, dir) {
+  if (!map) return false;
+  const here = map[idx(m.x, m.y)];
+  let best = null, bestV = dir > 0 ? here : (here === Infinity ? -1 : here);
+  const opts = g.rng.shuffle(DIRS8.slice());
+  for (const [dx, dy] of opts) {
+    const nx = m.x + dx, ny = m.y + dy;
+    if (!monsterCanEnter(g, m, nx, ny)) continue;
+    const v = map[idx(nx, ny)];
+    if (v === Infinity) continue;
+    if (dir > 0 ? v < bestV : v > bestV) { bestV = v; best = [nx, ny]; }
+  }
+  if (!best) return false;
+  moveMonster(g, m, best[0], best[1]);
+  return true;
+}
+
+function randomStep(g, m) {
+  for (const [dx, dy] of g.rng.shuffle(DIRS8.slice())) {
+    const nx = m.x + dx, ny = m.y + dy;
+    if (monsterCanEnter(g, m, nx, ny)) { moveMonster(g, m, nx, ny); return true; }
+  }
+  return false;
+}
+
+// Бродит по уровню, пока не заметит героя
+function wanderStep(g, m) {
+  if (!m.wander || (m.x === m.wander.x && m.y === m.wander.y) || g.rng.chance(0.03)) {
+    const p = randomFloorIn(g.level.tiles, g.rng, null);
+    m.wander = p;
+    m.wanderMap = null;
+  }
+  if (!m.wander) return randomStep(g, m);
+  if (!m.wanderMap) {
+    m.wanderMap = dijkstraMap([m.wander], (x, y) => (isPassableTile(g.level.tiles[idx(x, y)]) ? 1 : Infinity), 80);
+  }
+  if (!stepByMap(g, m, m.wanderMap, 1)) { m.wander = null; return randomStep(g, m); }
+  return true;
+}
+
+// Монстр видит героя, если стоит в его поле зрения (оно симметрично)
+function seesPlayer(g, m) {
+  return canSee(g, m.x, m.y) && dist(m, g.player) <= FOV_RADIUS;
+}
+
+function adjacentToPlayer(m, p) { return Math.max(Math.abs(m.x - p.x), Math.abs(m.y - p.y)) === 1; }
+
+function monsterAct(g, m) {
+  const def = MONSTERS[m.type];
+  const p = g.player;
+  if (def.peaceful) {
+    if (m.type === 'cat' && canSee(g, m.x, m.y) && g.rng.chance(0.04)) {
+      msg(g, g.rng.pick(['Барсик: «Мяу!»', 'Барсик смотрит на вас с упрёком.', 'Барсик зевает.', 'Барсик: «Мррр?»']), 'story');
+    }
+    return;
+  }
+  if (m.status.sleep > 0 || m.status.distracted > 0) return;
+  if (m.disguised) {
+    if (adjacentToPlayer(m, p) && g.rng.chance(0.25)) { revealMimic(g, m); }
+    return;
+  }
+
+  const sees = seesPlayer(g, m);
+  if (!m.awake) {
+    // Шанс проснуться, когда герой в поле зрения
+    if (sees && g.rng.chance(def.boss ? 1 : 0.35)) {
+      m.awake = true;
+      if (def.boss) bossIntro(g, m);
+      else if (monsterVisible(g, m) && g.rng.chance(0.4)) msg(g, `${capitalize(def.name)} замечает вас.`, 'info');
+    } else {
+      return; // спит
+    }
+  }
+  if (sees) m.lastSeen = { x: p.x, y: p.y };
+
+  if (m.status.confused) { randomStep(g, m); return; }
+  if (m.status.fear) { if (!stepByMap(g, m, g._chase, -1)) randomStep(g, m); return; }
+
+  switch (def.ai) {
+    case 'erratic':
+      if (g.rng.chance(0.5)) { randomStep(g, m); return; }
+      return meleeAI(g, m, sees);
+    case 'ranged': return rangedAI(g, m, sees);
+    case 'thief': return thiefAI(g, m, sees);
+    case 'caster': return casterAI(g, m, sees);
+    case 'boss': return bossAI(g, m, sees);
+    case 'ghost':
+    case 'mimic':
+    case 'melee':
+    default: return meleeAI(g, m, sees);
+  }
+}
+
+function meleeAI(g, m, sees) {
+  const p = g.player;
+  if (adjacentToPlayer(m, p)) {
+    // Через угол стены бить можно — классические рогалики так и делают
+    attack(g, m, p);
+    return;
+  }
+  const map = MONSTERS[m.type].phase ? g._phase : g._chase;
+  if (sees || m.lastSeen) {
+    if (stepByMap(g, m, map, 1)) {
+      if (m.lastSeen && m.x === m.lastSeen.x && m.y === m.lastSeen.y) m.lastSeen = null;
+      return;
+    }
+    // Застрял за другим монстром — иногда просто ждёт
+    if (g.rng.chance(0.3)) randomStep(g, m);
+    return;
+  }
+  wanderStep(g, m);
+}
+
+function rangedAI(g, m, sees) {
+  const p = g.player, def = MONSTERS[m.type];
+  const d = dist(m, p);
+  if (sees && d <= def.range && clearLine(g.level, m.x, m.y, p.x, p.y)) {
+    if (d <= 1 && g.rng.chance(0.6) && stepByMap(g, m, g._chase, -1)) return; // отступает
+    attack(g, m, p, { ranged: true, color: '#e8d9a8' });
+    return;
+  }
+  meleeAI(g, m, sees);
+}
+
+function thiefAI(g, m, sees) {
+  const p = g.player;
+  if (m.gold > 0) {
+    // Убегает с добычей; если оторвался — исчезает
+    if (!sees) {
+      m.hidden = (m.hidden || 0) + 1;
+      if (m.hidden > 8) {
+        g.actors = g.actors.filter((a) => a !== m);
+        msg(g, 'Где-то вдалеке хихикает гоблин. Ваши монеты ушли навсегда.', 'bad');
+        return;
+      }
+    } else m.hidden = 0;
+    if (!stepByMap(g, m, g._chase, -1)) {
+      if (adjacentToPlayer(m, p)) attack(g, m, p);
+      else randomStep(g, m);
+    }
+    return;
+  }
+  if (adjacentToPlayer(m, p) && p.gold > 0 && g.rng.chance(0.6)) {
+    const A = statsOf(g, m);
+    if (g.rng.next() < clamp(A.accu / (A.accu + playerEvasion(g)), 0.15, 0.95)) {
+      const amount = Math.max(1, Math.min(p.gold, Math.round(p.gold * g.rng.int(25, 50) / 100)));
+      p.gold -= amount; m.gold += amount;
+      msg(g, `Гоблин-воришка хватает ${amount} ${plural(amount, 'монету', 'монеты', 'монет')} и бросается наутёк!`, 'bad');
+      fx(g, { type: 'float', x: p.x, y: p.y, text: `-${amount}`, color: '#ffd34e' });
+      fx(g, { type: 'sound', name: 'coin' });
+      return;
+    }
+  }
+  meleeAI(g, m, sees);
+}
+
+function casterAI(g, m, sees) {
+  const p = g.player;
+  const d = dist(m, p);
+  m.cooldown = Math.max(0, m.cooldown - 1);
+  if (sees && m.cooldown === 0 && m.summons < 3) {
+    for (const [dx, dy] of g.rng.shuffle(DIRS8.slice())) {
+      const nx = m.x + dx, ny = m.y + dy;
+      if (g.level.tiles[idx(nx, ny)] === T.FLOOR && !occupied(g, nx, ny)) {
+        const s = spawnMonster(g, 'skeleton', nx, ny, { awake: true, owner: m.id });
+        s.hp = s.maxHp = Math.round(s.maxHp * 0.6);
+        m.summons++;
+        m.cooldown = g.rng.int(6, 9);
+        msg(g, 'Некромант взмахивает посохом. Из-под пола выбирается скелет!', 'bad');
+        fx(g, { type: 'particles', x: nx, y: ny, color: '#b28cff', n: 14 });
+        fx(g, { type: 'sound', name: 'summon' });
+        return;
+      }
+    }
+  }
+  if (adjacentToPlayer(m, p)) {
+    if (g.rng.chance(0.5) && stepByMap(g, m, g._chase, -1)) return;
+    attack(g, m, p);
+    return;
+  }
+  if (sees && d < 4) { if (stepByMap(g, m, g._chase, -1)) return; }
+  if (sees && d <= 6) return; // держит дистанцию
+  meleeAI(g, m, sees);
+}
+
+function bossIntro(g, m) {
+  msg(g, 'Древний Пёс поднимает голову. Глаза размером с блюдца.', 'boss');
+  msg(g, '«ГАВ!» — земля дрожит. Барсик в клетке шипит.', 'boss');
+  fx(g, { type: 'shake', power: 7 });
+  fx(g, { type: 'sound', name: 'bark' });
+  fx(g, { type: 'boss' });
+}
+
+function bossAI(g, m, sees) {
+  const p = g.player;
+  m.cooldown = Math.max(0, m.cooldown - 1);
+  m.cooldown2 = Math.max(0, m.cooldown2 - 1);
+  const d = dist(m, p);
+  // Лай: оглушает и путает
+  if (sees && d <= 5 && m.cooldown === 0 && g.rng.chance(0.5)) {
+    m.cooldown = g.rng.int(8, 11);
+    msg(g, '«ГАВ-ГАВ-ГАВ!!!» У вас звенит в ушах, мир плывёт.', 'boss');
+    p.status.confused = Math.max(p.status.confused || 0, 3);
+    fx(g, { type: 'shake', power: 6 });
+    fx(g, { type: 'bark', x: m.x, y: m.y });
+    fx(g, { type: 'sound', name: 'bark' });
+    return;
+  }
+  // Зовёт щенков
+  const pups = g.actors.filter((a) => a.type === 'puppy').length;
+  if (sees && m.cooldown2 === 0 && pups < 4) {
+    m.cooldown2 = g.rng.int(12, 16);
+    let n = 0;
+    for (const [dx, dy] of g.rng.shuffle(DIRS8.slice())) {
+      const nx = m.x + dx, ny = m.y + dy;
+      if (n < 2 && isPassableTile(g.level.tiles[idx(nx, ny)]) && !occupied(g, nx, ny)) {
+        spawnMonster(g, 'puppy', nx, ny, { awake: true });
+        fx(g, { type: 'particles', x: nx, y: ny, color: '#d9b38c', n: 10 });
+        n++;
+      }
+    }
+    if (n) msg(g, 'Пёс протяжно воет. Из темноты выбегают щенки!', 'boss');
+    return;
+  }
+  // В ярости при малом здоровье ходит быстрее
+  if (m.hp < m.maxHp * 0.35 && !m.enraged) {
+    m.enraged = true;
+    m.speed = 130;
+    msg(g, 'Пёс рычит и бросается в бешеную атаку!', 'boss');
+  }
+  meleeAI(g, m, sees);
+}
+
+// ---- 07_use.js ----
+// ===== Использование предметов =====
+
+// Что можно сделать с предметом (для меню инвентаря)
+function itemActions(g, it) {
+  const p = g.player;
+  const acts = [];
+  switch (it.kind) {
+    case 'weapon': acts.push(p.weapon === it ? ['unequip', 'Снять'] : ['equip', 'Взять в руку']); break;
+    case 'armor': acts.push(p.armor === it ? ['unequip', 'Снять'] : ['equip', 'Надеть']); break;
+    case 'potion': acts.push(['use', 'Выпить'], ['throw', 'Бросить']); break;
+    case 'scroll': acts.push(['use', 'Прочесть']); break;
+    case 'food': acts.push(['use', 'Съесть'], ['throw', 'Бросить']); break;
+    case 'wand': acts.push(['zap', 'Взмахнуть']); break;
+    case 'knife': acts.push(['throw', 'Метнуть']); break;
+  }
+  acts.push(['drop', 'Выбросить']);
+  return acts;
+}
+
+function identify(g, kind, type, silent) {
+  if (!g.known[kind] || g.known[kind][type]) return;
+  g.known[kind][type] = true;
+  if (!silent) {
+    const names = { potion: 'Это было зелье ' + (POTIONS[type] || {}).name, scroll: 'Это был свиток ' + (SCROLLS[type] || {}).name, wand: 'Это палочка ' + (WANDS[type] || {}).name };
+    msg(g, names[kind] + '.', 'ident');
+  }
+}
+
+function equipItem(g, it) {
+  const p = g.player;
+  if (it.kind === 'weapon') { p.weapon = it; msg(g, `Вы берёте в руку: ${itemName(g, it)}.`, 'info'); }
+  else if (it.kind === 'armor') { p.armor = it; msg(g, `Вы надеваете: ${itemName(g, it)}.`, 'info'); }
+  fx(g, { type: 'sound', name: 'equip' });
+  return endTurn(g);
+}
+
+function unequipItem(g, it) {
+  const p = g.player;
+  if (p.weapon === it) p.weapon = null;
+  if (p.armor === it) p.armor = null;
+  msg(g, `Вы снимаете: ${itemName(g, it)}.`, 'info');
+  return endTurn(g);
+}
+
+function dropFromInv(g, it) {
+  const p = g.player;
+  const wasEq = p.weapon === it || p.armor === it;
+  p.inv = p.inv.filter((o) => o !== it);
+  if (p.weapon === it) p.weapon = null;
+  if (p.armor === it) p.armor = null;
+  it.dropped = true; // чтобы не подбирать обратно на автомате
+  dropItem(g, it, p.x, p.y);
+  msg(g, `Вы выбрасываете: ${itemName(g, it)}${wasEq ? ' (было экипировано)' : ''}.`, 'info');
+  return endTurn(g);
+}
+
+// Выпить/прочесть/съесть. Для свитков, требующих выбора, вернёт {select: фильтр}
+function useItem(g, it, chosen) {
+  if (g.over) return false;
+  const p = g.player;
+  if (it.kind === 'potion') {
+    removeOne(g, it);
+    g.stats.potions++;
+    drinkPotion(g, it.type);
+    return endTurn(g);
+  }
+  if (it.kind === 'food') {
+    removeOne(g, it);
+    const f = FOODS[it.type];
+    const before = p.hp;
+    p.hp = Math.min(p.maxHp, p.hp + f.heal);
+    msg(g, it.type === 'pie' ? `Вы съедаете пирожок. Как у бабушки! (+${p.hp - before})` : `Вы съедаете сосиску. Вкусно, хоть и холодная. (+${p.hp - before})`, 'good');
+    fx(g, { type: 'float', x: p.x, y: p.y, text: `+${p.hp - before}`, color: '#7cd36a' });
+    fx(g, { type: 'sound', name: 'eat' });
+    return endTurn(g);
+  }
+  if (it.kind === 'scroll') {
+    const def = SCROLLS[it.type];
+    if (p.status.confused) {
+      msg(g, 'Буквы пляшут перед глазами. Не получается прочесть.', 'info');
+      return false;
+    }
+    if (def.needsItem && isKnown(g, it) && !chosen) {
+      return { select: def.needsItem };
+    }
+    removeOne(g, it);
+    g.stats.scrolls++;
+    readScroll(g, it.type, chosen);
+    return endTurn(g);
+  }
+  return false;
+}
+
+function drinkPotion(g, type) {
+  const p = g.player;
+  identify(g, 'potion', type, true);
+  fx(g, { type: 'sound', name: 'drink' });
+  switch (type) {
+    case 'heal': {
+      const amount = Math.max(12, Math.round(p.maxHp * 0.6));
+      const before = p.hp;
+      if (p.hp >= p.maxHp) { p.maxHp += 2; }
+      p.hp = Math.min(p.maxHp, p.hp + amount);
+      p.status.poison = 0; p.status.confused = 0;
+      msg(g, `Зелье лечения. Тепло разливается по телу. (+${p.hp - before})`, 'good');
+      fx(g, { type: 'particles', x: p.x, y: p.y, color: '#ff8fa3', n: 14 });
+      break;
+    }
+    case 'strength':
+      p.str++;
+      msg(g, 'Зелье силы! Мышцы наливаются мощью. Сила +1.', 'good');
+      fx(g, { type: 'particles', x: p.x, y: p.y, color: '#ffb347', n: 14 });
+      break;
+    case 'vision':
+      g.level.detect = true;
+      for (const it of g.items) g.level.seen[idx(it.x, it.y)] = 1;
+      msg(g, 'Зелье ясновидения. Вы чувствуете всех на этом уровне.', 'good');
+      break;
+    case 'haste':
+      p.status.haste = 15;
+      msg(g, 'Зелье ускорения! Мир вокруг замедлился.', 'good');
+      break;
+    case 'regen':
+      p.status.regen = 25;
+      msg(g, 'Зелье регенерации. Раны начинают затягиваться.', 'good');
+      break;
+    case 'exp':
+      msg(g, 'Зелье опыта! В голове проясняется.', 'good');
+      gainXP(g, xpToNext(p.level) - p.xp);
+      break;
+    case 'poison':
+      p.status.poison = (p.status.poison || 0) + 7;
+      msg(g, 'Фу! Это был яд.', 'bad');
+      break;
+    case 'confuse':
+      p.status.confused = (p.status.confused || 0) + 7;
+      msg(g, 'Зелье помутнения. Стены почему-то шатаются.', 'bad');
+      break;
+  }
+}
+
+function readScroll(g, type, chosen) {
+  const p = g.player;
+  identify(g, 'scroll', type, true);
+  fx(g, { type: 'sound', name: 'scroll' });
+  switch (type) {
+    case 'teleport':
+      msg(g, 'Свиток телепортации.', 'ident');
+      teleportPlayer(g);
+      break;
+    case 'mapping': {
+      const lv = g.level;
+      for (let i = 0; i < lv.tiles.length; i++) {
+        if (lv.tiles[i] !== T.WALL) lv.seen[i] = 1;
+        else {
+          const x = i % MAP_W, y = (i / MAP_W) | 0;
+          for (const [dx, dy] of DIRS8) {
+            if (inBounds(x + dx, y + dy) && lv.tiles[idx(x + dx, y + dy)] !== T.WALL) { lv.seen[i] = 1; break; }
+          }
+        }
+      }
+      for (const t of g.traps) t.hidden = false;
+      msg(g, 'Свиток карты. Перед глазами встаёт весь уровень.', 'good');
+      break;
+    }
+    case 'enchant': {
+      let target = chosen;
+      if (!target) target = p.weapon && (!p.armor || p.weapon.ench <= p.armor.ench) ? p.weapon : p.armor;
+      if (!target) { msg(g, 'Свиток улучшения светится и гаснет: улучшать нечего.', 'info'); break; }
+      target.ench++;
+      msg(g, `Свиток улучшения! ${capitalize(itemName(g, target))} мягко светится.`, 'good');
+      fx(g, { type: 'particles', x: p.x, y: p.y, color: '#8fd3ff', n: 16 });
+      break;
+    }
+    case 'identify': {
+      let target = chosen;
+      if (!target) target = p.inv.find((o) => !isKnown(g, o));
+      if (!target) { msg(g, 'Свиток опознания. Но вы и так всё знаете.', 'info'); break; }
+      identify(g, target.kind, target.type, true);
+      msg(g, `Свиток опознания: это ${itemName(g, target)}.`, 'ident');
+      break;
+    }
+    case 'fear': {
+      let n = 0;
+      for (const a of g.actors) {
+        if (MONSTERS[a.type].peaceful || !canSee(g, a.x, a.y)) continue;
+        a.status.fear = MONSTERS[a.type].boss ? 4 : 12;
+        a.awake = true; n++;
+      }
+      msg(g, n ? 'Свиток ужаса. Враги в панике разбегаются!' : 'Свиток ужаса. Бояться тут некому.', 'good');
+      fx(g, { type: 'shake', power: 2 });
+      break;
+    }
+    case 'fire': {
+      msg(g, 'Свиток огня! Вокруг вас взрывается пламя.', 'good');
+      fx(g, { type: 'explosion', x: p.x, y: p.y, r: 2 });
+      fx(g, { type: 'sound', name: 'boom' });
+      fx(g, { type: 'shake', power: 5 });
+      for (const a of g.actors.slice()) {
+        if (MONSTERS[a.type].peaceful) continue;
+        if (dist(a, p) <= 2) {
+          wake(g, a);
+          damage(g, a, g.rng.int(6, 12) + g.depth, g.player);
+        }
+      }
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const x = p.x + dx, y = p.y + dy;
+        if (inBounds(x, y) && g.level.tiles[idx(x, y)] === T.GRASS) g.level.tiles[idx(x, y)] = T.FLOOR;
+      }
+      break;
+    }
+    case 'summon': {
+      msg(g, 'Свиток призыва. Ой. Вокруг вас появляются монстры!', 'bad');
+      const n = g.rng.int(2, 3);
+      let made = 0;
+      for (const [dx, dy] of g.rng.shuffle(DIRS8.slice())) {
+        const x = p.x + dx, y = p.y + dy;
+        if (made < n && g.level.tiles[idx(x, y)] === T.FLOOR && !occupied(g, x, y)) {
+          spawnMonster(g, pickMonsterType(g, Math.min(g.depth, MAX_DEPTH - 1)), x, y, { awake: true });
+          fx(g, { type: 'particles', x, y, color: '#ff6b5e', n: 10 });
+          made++;
+        }
+      }
+      break;
+    }
+  }
+}
+
+// Траектория броска/луча: клетки от героя к цели до первого препятствия
+function projectilePath(g, tx, ty, range, stopAtActor = true) {
+  const p = g.player;
+  if (tx === p.x && ty === p.y) return [];
+  // Продлеваем линию за цель до дальности
+  const dx = tx - p.x, dy = ty - p.y;
+  const len = Math.max(Math.abs(dx), Math.abs(dy));
+  const ex = p.x + Math.round(dx * range / len), ey = p.y + Math.round(dy * range / len);
+  const pts = lineBetween(p.x, p.y, ex, ey).slice(1);
+  const out = [];
+  for (const [x, y] of pts) {
+    if (!inBounds(x, y)) break;
+    const t = g.level.tiles[idx(x, y)];
+    if (t === T.WALL || t === T.DOOR || t === T.BARS) break;
+    out.push([x, y]);
+    if (out.length >= range) break;
+    if (stopAtActor) {
+      const a = actorAt(g, x, y);
+      if (a && a !== p && !MONSTERS[a.type].peaceful) break;
+    }
+  }
+  return out;
+}
+
+function throwItem(g, it, tx, ty) {
+  if (g.over) return false;
+  const one = removeOne(g, it);
+  const path = projectilePath(g, tx, ty, 8);
+  if (!path.length) {
+    if (one !== it) it.qty++; else addToInventory(g, one);
+    msg(g, 'Туда не бросить: мешает стена.', 'info');
+    return false;
+  }
+  const [lx, ly] = path[path.length - 1];
+  const target = actorAt(g, lx, ly);
+  fx(g, { type: 'projectile', pts: path, sprite: itemSprite(g, one), tint: itemTint(g, one) });
+  const hitMonster = target && target !== g.player && !MONSTERS[target.type].peaceful ? target : null;
+  if (one.kind === 'knife') {
+    if (hitMonster) {
+      if (hitMonster.disguised) revealMimic(g, hitMonster);
+      attack(g, g.player, hitMonster, { ranged: true, dmg: [2 + g.player.str, 6 + g.player.str] });
+    }
+    // Нож падает рядом, его можно подобрать снова
+    if (g.rng.chance(0.8)) dropItem(g, one, lx, ly);
+    else msg(g, 'Нож ломается.', 'info');
+  } else if (one.kind === 'potion') {
+    msg(g, 'Склянка разбивается!', 'info');
+    fx(g, { type: 'particles', x: lx, y: ly, color: itemTint(g, one), n: 16 });
+    fx(g, { type: 'sound', name: 'glass' });
+    if (hitMonster) {
+      const name = MONSTERS[hitMonster.type].name;
+      wake(g, hitMonster);
+      if (one.type === 'poison') { hitMonster.status.poison = 8; msg(g, `Яд обжигает ${MONSTERS[hitMonster.type].acc}!`, 'good'); identify(g, 'potion', 'poison'); }
+      else if (one.type === 'confuse') { hitMonster.status.confused = 8; msg(g, `${capitalize(name)} растерянно озирается.`, 'good'); identify(g, 'potion', 'confuse'); }
+      else if (one.type === 'heal') { hitMonster.hp = hitMonster.maxHp; msg(g, `${capitalize(name)} выглядит отдохнувшим. Зря.`, 'bad'); identify(g, 'potion', 'heal'); }
+      else if (one.type === 'haste') { hitMonster.status.haste = 10; msg(g, `${capitalize(name)} ускоряется!`, 'bad'); identify(g, 'potion', 'haste'); }
+    }
+  } else if (one.kind === 'food') {
+    if (hitMonster && MONSTERS[hitMonster.type].dog && one.type === 'sausage') {
+      if (hitMonster.type === 'puppy') {
+        g.actors = g.actors.filter((a) => a !== hitMonster);
+        msg(g, 'Щенок хватает сосиску и радостно убегает. Минус один.', 'good');
+      } else {
+        hitMonster.status.distracted = 5;
+        msg(g, 'Древний Пёс забывает обо всём и жуёт сосиску!', 'good');
+      }
+      fx(g, { type: 'particles', x: lx, y: ly, color: '#e07a5f', n: 10 });
+    } else {
+      dropItem(g, one, lx, ly);
+      if (hitMonster) msg(g, `${capitalize(MONSTERS[hitMonster.type].name)} не обращает внимания на еду.`, 'info');
+    }
+  } else {
+    dropItem(g, one, lx, ly);
+  }
+  fx(g, { type: 'sound', name: 'throw' });
+  return endTurn(g);
+}
+
+function zapWand(g, it, tx, ty) {
+  if (g.over) return false;
+  const p = g.player;
+  if (it.charges <= 0) {
+    msg(g, 'Палочка трещит, но ничего не происходит. Заряды кончились.', 'info');
+    identify(g, 'wand', it.type, true);
+    return endTurn(g);
+  }
+  it.charges--;
+  const wasKnown = isKnown(g, it);
+  identify(g, 'wand', it.type, true);
+  fx(g, { type: 'sound', name: 'zap' });
+  switch (it.type) {
+    case 'bolt': {
+      const path = projectilePath(g, tx, ty, 9, false);
+      fx(g, { type: 'bolt', pts: path, color: '#9fe2ff' });
+      msg(g, 'С палочки срывается молния!', wasKnown ? 'info' : 'ident');
+      for (const [x, y] of path) {
+        const a = actorAt(g, x, y);
+        if (a && a !== p && !MONSTERS[a.type].peaceful) {
+          if (a.disguised) revealMimic(g, a);
+          wake(g, a);
+          damage(g, a, g.rng.int(6, 13) + Math.floor(g.depth / 2), p);
+        }
+      }
+      break;
+    }
+    case 'sleep':
+    case 'slow': {
+      const path = projectilePath(g, tx, ty, 9);
+      fx(g, { type: 'bolt', pts: path, color: it.type === 'sleep' ? '#c9b3ff' : '#7fe0b0', thin: true });
+      const last = path[path.length - 1];
+      const a = last && actorAt(g, last[0], last[1]);
+      if (a && a !== p && !MONSTERS[a.type].peaceful) {
+        const name = capitalize(MONSTERS[a.type].name);
+        if (it.type === 'sleep') {
+          a.status.sleep = MONSTERS[a.type].boss ? 3 : 12;
+          msg(g, `${name} засыпает.`, 'good');
+        } else {
+          a.status.slow = MONSTERS[a.type].boss ? 6 : 20;
+          msg(g, `${name} заметно замедляется.`, 'good');
+        }
+      } else msg(g, 'Луч уходит в пустоту.', 'info');
+      if (!wasKnown) msg(g, `Это палочка ${WANDS[it.type].name}.`, 'ident');
+      break;
+    }
+    case 'dig': {
+      const len = Math.max(Math.abs(tx - p.x), Math.abs(ty - p.y)) || 1;
+      const pts = lineBetween(p.x, p.y, p.x + Math.round((tx - p.x) * 8 / len), p.y + Math.round((ty - p.y) * 8 / len)).slice(1);
+      let dug = 0;
+      for (const [x, y] of pts) {
+        if (x <= 0 || y <= 0 || x >= MAP_W - 1 || y >= MAP_H - 1) break;
+        const t = g.level.tiles[idx(x, y)];
+        if (t === T.BARS) break;
+        if (t === T.WALL || t === T.DOOR) { g.level.tiles[idx(x, y)] = T.FLOOR; dug++; }
+      }
+      fx(g, { type: 'bolt', pts, color: '#d9a066', thin: true });
+      fx(g, { type: 'shake', power: 3 });
+      msg(g, dug ? 'Камень рассыпается в пыль, открывая проход.' : 'Луч копания ничего не задевает.', wasKnown ? 'info' : 'ident');
+      if (!wasKnown) msg(g, 'Это палочка копания.', 'ident');
+      break;
+    }
+    case 'blink': {
+      const path = projectilePath(g, tx, ty, 7);
+      let dest = null;
+      for (const [x, y] of path) {
+        if (occupied(g, x, y)) break;
+        dest = [x, y];
+      }
+      if (dest) {
+        fx(g, { type: 'particles', x: p.x, y: p.y, color: '#a98bff', n: 12 });
+        p.x = dest[0]; p.y = dest[1];
+        fx(g, { type: 'teleport', id: 0 });
+        fx(g, { type: 'particles', x: p.x, y: p.y, color: '#a98bff', n: 12 });
+        msg(g, 'Вы мгновенно переноситесь вперёд!', wasKnown ? 'info' : 'ident');
+        const trap = trapAt(g, p.x, p.y);
+        if (trap) triggerTrap(g, trap);
+      } else msg(g, 'Некуда перенестись.', 'info');
+      if (!wasKnown) msg(g, 'Это палочка скачка.', 'ident');
+      break;
+    }
+  }
+  return endTurn(g);
+}
+
+// Ближайший видимый враг (для автоприцела)
+function nearestEnemy(g) {
+  let best = null, bd = 99;
+  for (const a of g.actors) {
+    if (MONSTERS[a.type].peaceful || !monsterVisible(g, a) || !canSee(g, a.x, a.y)) continue;
+    const d = dist(a, g.player);
+    if (d < bd) { bd = d; best = a; }
+  }
+  return best;
+}
+
+// ---- 08_auto.js ----
+// ===== Автопутешествие и автоисследование, сохранение =====
+
+function visibleEnemies(g) {
+  return g.actors.filter((a) => !MONSTERS[a.type].peaceful && !a.disguised && canSee(g, a.x, a.y) && monsterVisible(g, a));
+}
+
+function travelCost(g) {
+  const lv = g.level;
+  return (x, y) => {
+    const i = idx(x, y);
+    if (!lv.seen[i]) return Infinity;
+    const t = lv.tiles[i];
+    if (!isPassableTile(t)) return Infinity;
+    const trap = trapAt(g, x, y);
+    if (trap && !trap.hidden) return 25; // обходим, но если иначе никак — наступаем
+    return 1;
+  };
+}
+
+// Следующий шаг пути к клетке (или null)
+function travelStep(g, tx, ty) {
+  const p = g.player;
+  if (p.x === tx && p.y === ty) return null;
+  const cost = travelCost(g);
+  // Цель может быть монстром/сундуком — разрешаем входить в неё
+  const map = dijkstraMap([{ x: tx, y: ty }], (x, y) => (x === tx && y === ty ? 1 : cost(x, y)), 120);
+  if (map[idx(p.x, p.y)] === Infinity) return null;
+  const path = pathFrom(map, p.x, p.y, (x, y) => {
+    const a = actorAt(g, x, y);
+    return a && a !== p;
+  });
+  if (!path || !path.length) return null;
+  return [path[0][0] - p.x, path[0][1] - p.y];
+}
+
+function exploreGoals(g) {
+  const lv = g.level, p = g.player;
+  const goals = [];
+  for (let y = 1; y < MAP_H - 1; y++) {
+    for (let x = 1; x < MAP_W - 1; x++) {
+      const i = idx(x, y);
+      if (!lv.seen[i] || !isPassableTile(lv.tiles[i])) continue;
+      if (x === p.x && y === p.y) continue;
+      let frontier = false;
+      for (const [dx, dy] of DIRS8) if (!lv.seen[idx(x + dx, y + dy)]) { frontier = true; break; }
+      if (frontier) goals.push({ x, y });
+    }
+  }
+  const full = p.inv.length >= INV_SIZE;
+  for (const it of g.items) {
+    if (it.price || it.dropped || !lv.seen[idx(it.x, it.y)]) continue;
+    if (full && it.kind !== 'gold' && it.kind !== 'chest' && !(STACKABLE.has(it.kind) && p.inv.some((o) => o.kind === it.kind && o.type === it.type))) continue;
+    if (it.x === p.x && it.y === p.y) continue;
+    goals.push({ x: it.x, y: it.y });
+  }
+  // Замаскированные мимики выглядят как сундуки — исследователь к ним тоже идёт
+  for (const a of g.actors) if (a.disguised && lv.seen[idx(a.x, a.y)]) goals.push({ x: a.x, y: a.y });
+  return goals;
+}
+
+// Один шаг автоисследования. Возвращает 'moved' | 'danger' | 'done' | 'stuck'
+function exploreStep(g) {
+  if (g.over) return 'stuck';
+  if (visibleEnemies(g).length) return 'danger';
+  const p = g.player;
+  const goals = exploreGoals(g);
+  if (!goals.length) return 'done';
+  const cost = travelCost(g);
+  const goalSet = new Set(goals.map((q) => idx(q.x, q.y)));
+  const map = dijkstraMap(goals, (x, y) => (goalSet.has(idx(x, y)) ? 1 : cost(x, y)), 150);
+  if (map[idx(p.x, p.y)] === Infinity) return 'done';
+  const path = pathFrom(map, p.x, p.y, (x, y) => {
+    const a = actorAt(g, x, y);
+    return a && a !== p && !a.disguised;
+  });
+  if (!path || !path.length) return 'stuck';
+  const [nx, ny] = path[0];
+  playerMove(g, nx - p.x, ny - p.y);
+  return 'moved';
+}
+
+// ---------- Сохранение ----------
+
+function serializeGame(g) {
+  const p = g.player;
+  const data = {
+    ...g,
+    rng: g.rng.state,
+    fx: [],
+    _chase: undefined,
+    _phase: undefined,
+    itemId: ITEM_ID,
+    player: { ...p, weapon: p.weapon ? p.weapon.id : null, armor: p.armor ? p.armor.id : null },
+    level: { ...g.level, tiles: Array.from(g.level.tiles), seen: Array.from(g.level.seen), visible: undefined },
+    actors: g.actors.map((a) => ({ ...a, wanderMap: undefined })),
+  };
+  return JSON.stringify(data);
+}
+
+function deserializeGame(json) {
+  const d = typeof json === 'string' ? JSON.parse(json) : json;
+  const rng = makeRNG(0);
+  rng.state = d.rng;
+  ITEM_ID = d.itemId || 1000;
+  const g = { ...d, rng, fx: [] };
+  delete g.itemId;
+  g.level.tiles = Uint8Array.from(d.level.tiles);
+  g.level.seen = Uint8Array.from(d.level.seen);
+  g.level.visible = new Uint8Array(MAP_W * MAP_H);
+  const p = g.player;
+  p.weapon = p.inv.find((o) => o.id === d.player.weapon) || null;
+  p.armor = p.inv.find((o) => o.id === d.player.armor) || null;
+  updateFOV(g);
+  computePlayerMaps(g);
+  return g;
+}
+
+// ---- 09_sprites.js ----
+// ===== Пиксельные спрайты (8×8, у босса 16×16) =====
+
+const PALETTE = {
+  k: '#1a1418', w: '#f2efe6', g: '#9a9aa6', d: '#5a5a66', r: '#d8433c', o: '#e88a3a',
+  y: '#ffd34e', b: '#8a5a34', B: '#5a3a24', n: '#d9b38c', p: '#f07fb4', G: '#5fbf5a',
+  h: '#2f7a3c', u: '#3f7fe0', U: '#24508f', c: '#9fe2ff', v: '#9a5ad6', P: '#4a2f6e',
+  s: '#f0c8a0', e: '#ff4040', m: '#c8ccd8', O: '#8a9a4a', Q: '#2a2238', a: '#ffb070',
+};
+
+const SPRITES = {
+  player: [
+    '..mmmm..',
+    '.mmmmmm.',
+    '.mskksm.',
+    '..ssss..',
+    '.uuyuuu.',
+    's.uuuu.s',
+    '..U..U..',
+    '..B..B..',
+  ],
+  rat: [
+    '........',
+    '........',
+    '.gg.....',
+    'gkgggg..',
+    'pgggggg.',
+    '.g.g.g.p',
+    '.......p',
+    '........',
+  ],
+  bat: [
+    '........',
+    'P......P',
+    'PP.PP.PP',
+    'PPPePePP',
+    '.PPPPPP.',
+    '..P..P..',
+    '........',
+    '........',
+  ],
+  slime: [
+    '........',
+    '........',
+    '...GG...',
+    '..GGGG..',
+    '.GwGGwG.',
+    '.GkGGkG.',
+    'GGGGGGGG',
+    '.hhhhhh.',
+  ],
+  goblin: [
+    'G.GGGG.G',
+    '.GGGGGG.',
+    '.GeGGeG.',
+    '..GGGG..',
+    '.bbbbbb.',
+    'G.bbbb.G',
+    '..b..b..',
+    '..B..B..',
+  ],
+  kobold: [
+    '......m.',
+    '.oo...m.',
+    'oeoo..m.',
+    '.ooo..m.',
+    'ooooo.b.',
+    '.oooobb.',
+    '.o..o.b.',
+    '.B..B...',
+  ],
+  skeleton: [
+    '..www...',
+    '.wkwkw..',
+    '.wwwww..',
+    '..wkw...',
+    '.wwwww..',
+    'w.www.w.',
+    '..w.w...',
+    '.ww.ww..',
+  ],
+  archer: [
+    '..www.b.',
+    '.wkwkw.b',
+    '.wwwww.b',
+    '..wkw..b',
+    '.wwwwwwb',
+    'w.www..b',
+    '..w.w.b.',
+    '.ww.ww..',
+  ],
+  spider: [
+    '........',
+    'P..PP..P',
+    '.P.PP.P.',
+    '..PPPP..',
+    'PPPePePP',
+    '..PPPP..',
+    '.P.PP.P.',
+    'P......P',
+  ],
+  chest: [
+    '........',
+    '.bbbbbb.',
+    'bBBBBBBb',
+    'bbbyybbb',
+    'bBByyBBb',
+    'bbbbbbbb',
+    'BBBBBBBB',
+    '........',
+  ],
+  mimic: [
+    '.bbbbbb.',
+    'bBBBBBBb',
+    'bwkwkwkb',
+    'rrrrrrrr',
+    'bkwkwkwb',
+    'bbbbbbbb',
+    'BBBBBBBB',
+    '........',
+  ],
+  ghost: [
+    '..wwww..',
+    '.wwwwww.',
+    'wwkwwkww',
+    'wwwwwwww',
+    'wwwkkwww',
+    'wwwwwwww',
+    'wwwwwwww',
+    'w.ww.ww.',
+  ],
+  ogre: [
+    '.OOOOOO.',
+    'OOOOOOOO',
+    'OOeOOeOO',
+    'OOwOOwOO',
+    '.OOOOOO.',
+    'bOOOOOOb',
+    'ObbbbbbO',
+    '.OO..OO.',
+  ],
+  shade: [
+    '..QQQQ..',
+    '.QQQQQQ.',
+    'QQeQQeQQ',
+    'QQQQQQQQ',
+    '.QQQQQQ.',
+    'QQQQQQQQ',
+    'Q.QQ.QQ.',
+    '........',
+  ],
+  necro: [
+    '..PPP..y',
+    '.PPPPP.m',
+    '.PekeP.m',
+    '.PPPPP.m',
+    'PPPPPPPm',
+    '.PPvPP.m',
+    '.PPPPP.m',
+    '.P...P.m',
+  ],
+  puppy: [
+    '........',
+    '........',
+    'nn......',
+    'nknnnn..',
+    'knnnnnnn',
+    '.nnnnnn.',
+    '.n.n.n.n',
+    '........',
+  ],
+  merchant: [
+    '..yyyy..',
+    '.yyyyyy.',
+    'yyyyyyyy',
+    '..sksk..',
+    '..wwww..',
+    '.vwwwwv.',
+    '.vvvvvv.',
+    '.v....v.',
+  ],
+  cat: [
+    '.o....o.',
+    '.oo..oo.',
+    '.oooooo.',
+    '.oGooGo.',
+    '.ooppoo.',
+    'oooaaooo',
+    'oooaaoo.',
+    '.oo..oo.',
+  ],
+  potion: [
+    '...bb...',
+    '...gg...',
+    '..gxxg..',
+    '.gxxxxg.',
+    '.gxwxxg.',
+    '.gxxxxg.',
+    '..gggg..',
+    '........',
+  ],
+  scroll: [
+    '........',
+    '.nnnnnn.',
+    'nwwwwwwn',
+    '.wkkkkw.',
+    '.wwwwww.',
+    '.wkkkw..',
+    'nwwwwwwn',
+    '.nnnnnn.',
+  ],
+  wand: [
+    '......c.',
+    '.....cwc',
+    '......c.',
+    '.....b..',
+    '....b...',
+    '...b....',
+    '..b.....',
+    '.b......',
+  ],
+  pie: [
+    '........',
+    '........',
+    '..oooo..',
+    '.oyoyoo.',
+    'oooooooo',
+    'bbbbbbbb',
+    '.bbbbbb.',
+    '........',
+  ],
+  sausage: [
+    '........',
+    '........',
+    'r.......',
+    '.rrrrrr.',
+    'rrppprrr',
+    '.rrrrrr.',
+    '.......r',
+    '........',
+  ],
+  knife: [
+    '........',
+    '......m.',
+    '.....mm.',
+    '....mm..',
+    '...mm...',
+    '..bm....',
+    '.bb.....',
+    '........',
+  ],
+  gold: [
+    '........',
+    '........',
+    '...yy...',
+    '..yyyy..',
+    '.yyoyyy.',
+    'yyyyyoyy',
+    '.oyyyyo.',
+    '........',
+  ],
+  dagger: [
+    '........',
+    '......m.',
+    '.....m..',
+    '....m...',
+    '...m....',
+    '..yy....',
+    '.b......',
+    '........',
+  ],
+  sword: [
+    '.......m',
+    '......mm',
+    '.....mm.',
+    '....mm..',
+    '.y.mm...',
+    '..yy....',
+    '.b.y....',
+    'b.......',
+  ],
+  longsword: [
+    '.......c',
+    '......cm',
+    '.....cm.',
+    '....cm..',
+    '.y.cm...',
+    '..yy....',
+    '.b.y....',
+    'b.......',
+  ],
+  axe: [
+    '....mm..',
+    '...mmmm.',
+    '...bmmm.',
+    '..b.mm..',
+    '.b......',
+    'b.......',
+    '........',
+    '........',
+  ],
+  mace: [
+    '....kk..',
+    '...kddk.',
+    '...kddk.',
+    '....kk..',
+    '...b....',
+    '..b.....',
+    '.b......',
+    'b.......',
+  ],
+  hammer: [
+    '..dddd..',
+    '..dmmd..',
+    '..dddd..',
+    '...b....',
+    '...b....',
+    '...b....',
+    '...b....',
+    '...B....',
+  ],
+  leather: [
+    '........',
+    '.bb..bb.',
+    '.bbbbbb.',
+    '..bbbb..',
+    '..bbbb..',
+    '..bbbb..',
+    '..BBBB..',
+    '........',
+  ],
+  studded: [
+    '........',
+    '.bb..bb.',
+    '.bybbyb.',
+    '..bbbb..',
+    '..ybby..',
+    '..bbbb..',
+    '..BBBB..',
+    '........',
+  ],
+  chain: [
+    '........',
+    '.gg..gg.',
+    '.gdgdgg.',
+    '..gdgd..',
+    '..dgdg..',
+    '..gdgd..',
+    '..dddd..',
+    '........',
+  ],
+  scale: [
+    '........',
+    '.GG..GG.',
+    '.GhGhGG.',
+    '..hGhG..',
+    '..GhGh..',
+    '..hGhG..',
+    '..hhhh..',
+    '........',
+  ],
+  plate: [
+    '........',
+    '.mm..mm.',
+    '.mwmmmm.',
+    '..mwmm..',
+    '..mmmm..',
+    '..mmmm..',
+    '..dddd..',
+    '........',
+  ],
+  trap: [
+    '........',
+    '........',
+    '...r....',
+    '..r.r...',
+    '.r...r..',
+    '........',
+    '.r.r.r..',
+    '........',
+  ],
+  zzz: [
+    '.wwww...',
+    '...w....',
+    '..w.....',
+    '.wwww...',
+    '........',
+    '....www.',
+    '.....w..',
+    '....www.',
+  ],
+  dog: [
+    '................',
+    '..BB........BB..',
+    '.BnnB......BnnB.',
+    '.BnnnBBBBBBnnnB.',
+    '..BnnnnnnnnnnB..',
+    '..BnnnnnnnnnnB..',
+    '.BnnkknnnnkknnB.',
+    '.BnnkennnnkennB.',
+    '.BnnnnnnnnnnnnB.',
+    '.BnnnnwkkwnnnnB.',
+    '..BnnnkkkknnnB..',
+    '..BnnnnrrnnnnB..',
+    '...BnnnrrnnnB...',
+    '..BnnnnnnnnnnB..',
+    '.BnnBnnnnnnBnnB.',
+    '.BBB.BBBBBB.BBB.',
+  ],
+};
+
+const _spriteCache = new Map();
+
+// Готовый холст со спрайтом; tint заменяет пиксели 'x'
+function getSprite(name, tint, overrideColor) {
+  const key = name + '|' + (tint || '') + '|' + (overrideColor || '');
+  let c = _spriteCache.get(key);
+  if (c) return c;
+  const rows = SPRITES[name] || SPRITES.potion;
+  const h = rows.length, w = rows[0].length;
+  c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const ch = rows[y][x];
+      if (ch === '.') continue;
+      let col = ch === 'x' ? (tint || '#c0c0c0') : PALETTE[ch];
+      if (overrideColor) col = overrideColor;
+      if (!col) continue;
+      ctx.fillStyle = col;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  _spriteCache.set(key, c);
+  return c;
+}
+
+// ---- 10_render.js ----
+// ===== Отрисовка на canvas =====
+
+const R = {
+  canvas: null, ctx: null, dpr: 1, ts: 32, w: 0, h: 0,
+  cam: { x: 0, y: 0, init: false },
+  anim: new Map(), // id -> {x, y, bx, by, flash}
+  floats: [], particles: [], bolts: [], projectiles: [], deaths: [], rings: [],
+  shake: 0, fadeIn: 0, bossPulse: 0,
+  mapCanvas: null, mapKey: '', mini: null,
+  hover: null, target: null, targetPath: null,
+  time: 0,
+};
+
+function initRenderer(canvas, mini) {
+  R.canvas = canvas;
+  R.ctx = canvas.getContext('2d');
+  R.mini = mini;
+  R.mapCanvas = document.createElement('canvas');
+  R.mapCanvas.width = MAP_W * 8;
+  R.mapCanvas.height = MAP_H * 8;
+  resizeRenderer();
+}
+
+function resizeRenderer() {
+  const c = R.canvas;
+  const rect = c.parentElement.getBoundingClientRect();
+  R.dpr = Math.min(window.devicePixelRatio || 1, 3);
+  R.w = Math.max(100, rect.width);
+  R.h = Math.max(100, rect.height);
+  c.width = Math.round(R.w * R.dpr);
+  c.height = Math.round(R.h * R.dpr);
+  c.style.width = R.w + 'px';
+  c.style.height = R.h + 'px';
+  // На телефоне видно ~13 клеток в ширину, на компьютере больше
+  const want = R.w < 520 ? 12.5 : R.w < 900 ? 17 : 23;
+  R.ts = clamp(Math.floor(R.w / want / 2) * 2, 24, 56);
+  if (R.h / R.ts < 9) R.ts = Math.max(20, Math.floor(R.h / 9 / 2) * 2);
+}
+
+// Детерминированный шум по координатам — чтобы стены не «мигали»
+function hash2(x, y, s = 0) {
+  let h = (x * 374761393 + y * 668265263 + s * 2246822519) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  r = clamp(Math.round(r * f), 0, 255); g = clamp(Math.round(g * f), 0, 255); b = clamp(Math.round(b * f), 0, 255);
+  return `rgb(${r},${g},${b})`;
+}
+
+// Перерисовываем пиксельную карту уровня только при изменении тайлов
+function rebuildMap(g) {
+  const lv = g.level;
+  let key = g.depth + ':' + g.seed + ':';
+  // Быстрый хэш тайлов
+  let h = 0;
+  for (let i = 0; i < lv.tiles.length; i++) h = (Math.imul(h, 31) + lv.tiles[i] + 1) | 0;
+  key += h;
+  if (key === R.mapKey) return;
+  R.mapKey = key;
+  const ctx = R.mapCanvas.getContext('2d');
+  const th = THEMES[lv.theme];
+  ctx.fillStyle = th.fog;
+  ctx.fillRect(0, 0, R.mapCanvas.width, R.mapCanvas.height);
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) drawTilePixels(ctx, lv, th, x, y);
+  }
+}
+
+function px(ctx, color, x, y, w = 1, h = 1) { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); }
+
+function drawFloorPixels(ctx, th, X, Y, x, y) {
+  px(ctx, th.floor, X, Y, 8, 8);
+  const r = hash2(x, y);
+  if (r < 0.5) px(ctx, th.floorDot, X + Math.floor(hash2(x, y, 1) * 7), Y + Math.floor(hash2(x, y, 2) * 7), 1, 1);
+  if (r < 0.2) px(ctx, th.floorDot, X + Math.floor(hash2(x, y, 3) * 6), Y + Math.floor(hash2(x, y, 4) * 6), 2, 1);
+  // тонкие швы плитки
+  px(ctx, shade(th.floor, 0.85), X, Y + 7, 8, 1);
+  px(ctx, shade(th.floor, 0.85), X + 7, Y, 1, 8);
+}
+
+function drawTilePixels(ctx, lv, th, x, y) {
+  const X = x * 8, Y = y * 8;
+  const t = lv.tiles[idx(x, y)];
+  const below = y + 1 < MAP_H ? lv.tiles[idx(x, y + 1)] : T.WALL;
+  switch (t) {
+    case T.WALL: {
+      if (below !== T.WALL) {
+        // Лицевая сторона стены: кирпичи
+        px(ctx, th.wall, X, Y, 8, 8);
+        px(ctx, th.wallHi, X, Y, 8, 1);
+        const off = (y % 2) * 4;
+        px(ctx, th.wallLo, X, Y + 3, 8, 1);
+        px(ctx, th.wallLo, X, Y + 7, 8, 1);
+        px(ctx, th.wallLo, X + ((1 + off) % 8), Y + 1, 1, 2);
+        px(ctx, th.wallLo, X + ((5 + off) % 8), Y + 4, 1, 3);
+        if (hash2(x, y, 7) < 0.25) px(ctx, th.wallHi, X + 2 + Math.floor(hash2(x, y, 8) * 4), Y + 5, 2, 1);
+      } else {
+        // Верх стены
+        px(ctx, th.wallLo, X, Y, 8, 8);
+        if (hash2(x, y, 5) < 0.3) px(ctx, shade(th.wallLo, 1.15), X + Math.floor(hash2(x, y, 6) * 6), Y + Math.floor(hash2(x, y, 9) * 6), 2, 2);
+      }
+      break;
+    }
+    case T.FLOOR: drawFloorPixels(ctx, th, X, Y, x, y); break;
+    case T.DOOR:
+      drawFloorPixels(ctx, th, X, Y, x, y);
+      px(ctx, '#3a2418', X, Y, 8, 8);
+      px(ctx, '#7a4a2a', X + 1, Y + 1, 6, 7);
+      px(ctx, '#5a341c', X + 3, Y + 1, 1, 7);
+      px(ctx, '#5a341c', X + 1, Y + 3, 6, 1);
+      px(ctx, '#ffd34e', X + 5, Y + 5, 1, 1);
+      break;
+    case T.ODOOR:
+      drawFloorPixels(ctx, th, X, Y, x, y);
+      px(ctx, '#3a2418', X, Y, 1, 8);
+      px(ctx, '#3a2418', X + 7, Y, 1, 8);
+      px(ctx, '#7a4a2a', X + 1, Y, 1, 8);
+      break;
+    case T.STAIRS:
+      drawFloorPixels(ctx, th, X, Y, x, y);
+      for (let i = 0; i < 4; i++) {
+        px(ctx, shade(th.floor, 0.25 + i * 0.12), X + 1, Y + 1 + i * 2, 6, 2);
+        px(ctx, shade(th.wallHi, 0.9 - i * 0.15), X + 1, Y + 1 + i * 2, 6, 1);
+      }
+      break;
+    case T.UPSTAIRS:
+      drawFloorPixels(ctx, th, X, Y, x, y);
+      for (let i = 0; i < 4; i++) px(ctx, shade(th.wallHi, 0.6 + i * 0.15), X + 1, Y + 6 - i * 2, 6, 1);
+      px(ctx, '#e6d9a8', X + 3, Y, 2, 1);
+      break;
+    case T.WATER:
+      px(ctx, th.water, X, Y, 8, 8);
+      px(ctx, shade(th.water, 1.3), X + (hash2(x, y) * 4 | 0), Y + 2, 3, 1);
+      px(ctx, shade(th.water, 1.2), X + 3 + (hash2(x, y, 2) * 4 | 0), Y + 5, 3, 1);
+      break;
+    case T.GRASS:
+      drawFloorPixels(ctx, th, X, Y, x, y);
+      for (let i = 0; i < 5; i++) {
+        const gx = X + Math.floor(hash2(x, y, 10 + i) * 7), gy = Y + 2 + Math.floor(hash2(x, y, 20 + i) * 4);
+        px(ctx, th.grass, gx, gy, 1, 3);
+        px(ctx, shade(th.grass, 1.35), gx, gy, 1, 1);
+      }
+      break;
+    case T.BARS:
+      drawFloorPixels(ctx, th, X, Y, x, y);
+      for (let i = 0; i < 4; i++) px(ctx, '#8a8f9e', X + 1 + i * 2, Y, 1, 8);
+      px(ctx, '#5a5f6e', X, Y + 1, 8, 1);
+      px(ctx, '#5a5f6e', X, Y + 6, 8, 1);
+      break;
+    default:
+      px(ctx, th.fog, X, Y, 8, 8);
+  }
+}
+
+// ---------- События игры → анимации ----------
+
+function consumeFx(g) {
+  const p = g.player;
+  for (const e of g.fx) {
+    switch (e.type) {
+      case 'float': R.floats.push({ x: e.x, y: e.y, text: e.text, color: e.color, t: 0, big: e.big, dx: (Math.random() - 0.5) * 0.3 }); break;
+      case 'bump': {
+        const a = R.anim.get(e.id);
+        if (a) { const dx = sign(e.tx - e.x), dy = sign(e.ty - e.y); a.bx = dx * 0.35; a.by = dy * 0.35; }
+        break;
+      }
+      case 'shot': R.projectiles.push({ pts: lineBetween(e.x, e.y, e.tx, e.ty).slice(1), t: 0, color: e.color || '#fff', arrow: true }); break;
+      case 'flash': { const a = R.anim.get(e.id); if (a) a.flash = 1; break; }
+      case 'shake': R.shake = Math.max(R.shake, e.power); break;
+      case 'particles': burst(e.x, e.y, e.color, e.n); break;
+      case 'death': R.deaths.push({ x: e.x, y: e.y, sprite: e.sprite, t: 0, big: e.big }); burst(e.x, e.y, '#d8d0c0', 10); break;
+      case 'bolt': R.bolts.push({ pts: e.pts, color: e.color, t: 0, thin: e.thin }); break;
+      case 'projectile': R.projectiles.push({ pts: e.pts, t: 0, sprite: e.sprite, tint: e.tint }); break;
+      case 'explosion': R.rings.push({ x: e.x, y: e.y, r: e.r, t: 0, color: '#ff9a3c', fill: true }); burst(e.x, e.y, '#ffb347', 30, 2.5); break;
+      case 'bark': R.rings.push({ x: e.x, y: e.y, r: 5, t: 0, color: '#ffe0a0' }); break;
+      case 'levelup': R.rings.push({ x: e.x, y: e.y, r: 1.5, t: 0, color: '#ffd34e' }); burst(e.x, e.y, '#ffd34e', 20, 1.2, -1); break;
+      case 'teleport': { const a = R.anim.get(e.id); if (a) { a.x = p.x; a.y = p.y; } break; }
+      case 'levelin': R.fadeIn = 1; R.anim.clear(); R.cam.init = false; R.floats = []; R.particles = []; R.deaths = []; break;
+      case 'boss': R.bossPulse = 1; break;
+      case 'sound': playSound(e.name); break;
+    }
+  }
+  g.fx.length = 0;
+}
+
+function burst(x, y, color, n, speed = 1.5, up = 0) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, s = (0.3 + Math.random()) * speed;
+    R.particles.push({ x: x + 0.5, y: y + 0.5, vx: Math.cos(a) * s, vy: Math.sin(a) * s + up, life: 1, color, size: Math.random() < 0.3 ? 2 : 1 });
+  }
+}
+
+// ---------- Кадр ----------
+
+function renderFrame(g, dt) {
+  const ctx = R.ctx;
+  R.time += dt;
+  rebuildMap(g);
+  const lv = g.level, p = g.player, th = THEMES[lv.theme];
+  const ts = R.ts;
+
+  // Анимационные позиции актёров
+  const all = [p, ...g.actors];
+  const k = 1 - Math.pow(0.0001, dt); // плавное догоняние
+  for (const a of all) {
+    let an = R.anim.get(a.id);
+    if (!an) { an = { x: a.x, y: a.y, bx: 0, by: 0, flash: 0 }; R.anim.set(a.id, an); }
+    if (Math.abs(an.x - a.x) > 3 || Math.abs(an.y - a.y) > 3) { an.x = a.x; an.y = a.y; }
+    an.x += (a.x - an.x) * Math.min(1, k * 1.6);
+    an.y += (a.y - an.y) * Math.min(1, k * 1.6);
+    an.bx *= Math.pow(0.002, dt); an.by *= Math.pow(0.002, dt);
+    an.flash = Math.max(0, an.flash - dt * 6);
+  }
+  for (const id of R.anim.keys()) if (id !== 0 && !g.actors.some((a) => a.id === id)) R.anim.delete(id);
+
+  // Камера
+  const pa = R.anim.get(0);
+  const viewW = R.w / ts, viewH = R.h / ts;
+  let cx = pa.x + 0.5 - viewW / 2, cy = pa.y + 0.5 - viewH / 2;
+  // Не показываем пустоту за краями карты, если карта больше экрана
+  if (MAP_W > viewW) cx = clamp(cx, -0.5, MAP_W - viewW + 0.5); else cx = (MAP_W - viewW) / 2;
+  if (MAP_H > viewH) cy = clamp(cy, -0.5, MAP_H - viewH + 0.5); else cy = (MAP_H - viewH) / 2;
+  if (!R.cam.init) { R.cam.x = cx; R.cam.y = cy; R.cam.init = true; }
+  R.cam.x += (cx - R.cam.x) * Math.min(1, k * 1.2);
+  R.cam.y += (cy - R.cam.y) * Math.min(1, k * 1.2);
+  let sx = 0, sy = 0;
+  if (R.shake > 0) {
+    sx = (Math.random() - 0.5) * R.shake * 2; sy = (Math.random() - 0.5) * R.shake * 2;
+    R.shake = Math.max(0, R.shake - dt * 25);
+  }
+
+  ctx.setTransform(R.dpr, 0, 0, R.dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = th.fog;
+  ctx.fillRect(0, 0, R.w, R.h);
+  const ox = Math.round(-R.cam.x * ts + sx), oy = Math.round(-R.cam.y * ts + sy);
+  const toX = (x) => ox + x * ts, toY = (y) => oy + y * ts;
+
+  const x0 = Math.max(0, Math.floor(R.cam.x) - 1), y0 = Math.max(0, Math.floor(R.cam.y) - 1);
+  const x1 = Math.min(MAP_W - 1, Math.ceil(R.cam.x + viewW) + 1), y1 = Math.min(MAP_H - 1, Math.ceil(R.cam.y + viewH) + 1);
+
+  // Тайлы: рисуем одну большую картинку, затем затемняем
+  ctx.drawImage(R.mapCanvas, 0, 0, MAP_W * 8, MAP_H * 8, ox, oy, MAP_W * ts, MAP_H * ts);
+
+  // Анимация воды
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    if (lv.tiles[idx(x, y)] === T.WATER && lv.visible[idx(x, y)]) {
+      const ph = R.time * 1.6 + x * 0.7 + y * 0.4;
+      ctx.fillStyle = 'rgba(180,220,255,0.10)';
+      const wy = (Math.sin(ph) * 0.5 + 0.5) * ts * 0.7;
+      ctx.fillRect(toX(x) + ts * 0.15, toY(y) + wy, ts * 0.5, Math.max(1, ts / 8));
+    }
+  }
+
+  // Ловушки
+  for (const t of g.traps) {
+    if (t.hidden || !lv.seen[idx(t.x, t.y)]) continue;
+    drawSprite(ctx, 'trap', toX(t.x), toY(t.y), ts, 1);
+  }
+  // Предметы
+  for (const it of g.items) {
+    if (!lv.seen[idx(it.x, it.y)] && !lv.detect) continue;
+    const bob = lv.visible[idx(it.x, it.y)] ? Math.sin(R.time * 3 + it.id) * ts * 0.03 : 0;
+    drawSprite(ctx, itemSprite(g, it), toX(it.x) + ts * 0.1, toY(it.y) + ts * 0.1 + bob, ts * 0.8, 1, itemTint(g, it));
+    if (it.price && lv.visible[idx(it.x, it.y)]) {
+      ctx.font = `${Math.max(9, ts * 0.3)}px "Tiny5", monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#000a';
+      ctx.fillText(it.price, toX(it.x) + ts / 2 + 1, toY(it.y) + ts + 1);
+      ctx.fillStyle = '#ffd34e';
+      ctx.fillText(it.price, toX(it.x) + ts / 2, toY(it.y) + ts);
+    }
+  }
+
+  // Затемнение: память и расстояние
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const i = idx(x, y);
+      if (!lv.seen[i]) { ctx.fillStyle = th.fog; ctx.fillRect(toX(x), toY(y), ts, ts); continue; }
+      if (!lv.visible[i]) { ctx.fillStyle = 'rgba(8,8,18,0.58)'; ctx.fillRect(toX(x), toY(y), ts, ts); continue; }
+      const d = Math.hypot(x - p.x, y - p.y) / (FOV_RADIUS + 0.5);
+      const a = clamp(d * d * 0.5, 0, 0.5);
+      if (a > 0.02) { ctx.fillStyle = `rgba(6,4,10,${a.toFixed(3)})`; ctx.fillRect(toX(x), toY(y), ts, ts); }
+    }
+  }
+
+  // Тёплый свет фонаря вокруг героя
+  {
+    const P = R.anim.get(0);
+    const lx = toX(P.x) + ts / 2, ly = toY(P.y) + ts / 2;
+    const flick = 1 + Math.sin(R.time * 7.3) * 0.015 + Math.sin(R.time * 13.1) * 0.01;
+    const lg = ctx.createRadialGradient(lx, ly, ts * 0.3, lx, ly, ts * FOV_RADIUS * 0.75 * flick);
+    lg.addColorStop(0, 'rgba(255,170,80,0.16)');
+    lg.addColorStop(1, 'rgba(255,170,80,0)');
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = lg;
+    ctx.fillRect(lx - ts * FOV_RADIUS, ly - ts * FOV_RADIUS, ts * FOV_RADIUS * 2, ts * FOV_RADIUS * 2);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // Трупики (исчезают)
+  for (const d of R.deaths) {
+    d.t += dt;
+    const a = Math.max(0, 1 - d.t * 2.2);
+    if (a <= 0) continue;
+    ctx.globalAlpha = a;
+    const s = d.big ? ts * 1.6 : ts;
+    drawSprite(ctx, d.sprite, toX(d.x) + (ts - s) / 2, toY(d.y) + (ts - s) / 2 - d.t * ts * 0.5, s, 1, null, '#ffffff');
+    ctx.globalAlpha = 1;
+  }
+  R.deaths = R.deaths.filter((d) => d.t < 0.5);
+
+  // Монстры
+  const sorted = g.actors.slice().sort((a, b) => a.y - b.y);
+  for (const m of sorted) {
+    const def = MONSTERS[m.type];
+    const vis = monsterVisible(g, m);
+    if (!vis) continue;
+    const an = R.anim.get(m.id);
+    const dx = toX(an.x + an.bx), dy = toY(an.y + an.by);
+    const inSight = canSee(g, m.x, m.y);
+    if (!inSight) ctx.globalAlpha = 0.45;
+    // тень
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(dx + ts / 2, dy + ts * 0.9, ts * (def.boss ? 0.7 : 0.32), ts * 0.09, 0, 0, Math.PI * 2);
+    ctx.fill();
+    let sprite = def.sprite;
+    if (m.disguised) sprite = 'chest';
+    const breathe = !m.disguised && m.awake ? Math.sin(R.time * 4 + m.id) * ts * 0.03 : 0;
+    if (def.boss) {
+      const s = ts * 1.7;
+      drawSprite(ctx, sprite, dx + (ts - s) / 2, dy + ts - s + breathe, s, 1, null, an.flash > 0.5 ? '#ffffff' : null);
+    } else {
+      if (m.type === 'ghost' || m.type === 'shade') ctx.globalAlpha *= 0.55 + Math.sin(R.time * 2.5 + m.id) * 0.2;
+      drawSprite(ctx, sprite, dx + ts * 0.06, dy + ts * 0.04 + breathe, ts * 0.88, 1, null, an.flash > 0.5 ? '#ffffff' : null);
+    }
+    ctx.globalAlpha = 1;
+    // Полоска здоровья
+    if (!def.peaceful && !m.disguised && m.hp < m.maxHp && inSight) {
+      const w = def.boss ? ts * 1.6 : ts * 0.8, bx = dx + (ts - w) / 2, by = def.boss ? dy - ts * 0.8 : dy - ts * 0.08;
+      ctx.fillStyle = '#000c'; ctx.fillRect(bx - 1, by - 1, w + 2, Math.max(3, ts / 10) + 2);
+      ctx.fillStyle = m.hp / m.maxHp > 0.5 ? '#5fbf5a' : m.hp / m.maxHp > 0.25 ? '#e0a43a' : '#d8433c';
+      ctx.fillRect(bx, by, w * Math.max(0, m.hp / m.maxHp), Math.max(3, ts / 10));
+    }
+    // Статусы
+    if (inSight && (!m.awake || m.status.sleep) && !m.disguised && !def.peaceful) {
+      const zz = (R.time * 0.6 + m.id * 0.37) % 1;
+      ctx.font = `${Math.max(10, ts * (0.28 + zz * 0.14))}px "Tiny5", monospace`;
+      ctx.textAlign = 'center';
+      ctx.globalAlpha = 1 - zz;
+      ctx.fillStyle = '#c9d6ff';
+      ctx.fillText('z', dx + ts * (0.75 + zz * 0.15), dy + ts * (0.1 - zz * 0.35));
+      ctx.globalAlpha = 1;
+    }
+    if (inSight && (m.status.confused || m.status.fear || m.status.distracted)) {
+      ctx.font = `${Math.max(10, ts * 0.38)}px "Tiny5", monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = m.status.fear ? '#c9b3ff' : m.status.distracted ? '#ffb070' : '#7fe0b0';
+      ctx.fillText(m.status.fear ? '!' : m.status.distracted ? '♥' : '?', dx + ts * 0.85, dy + ts * 0.1);
+    }
+  }
+
+  // Игрок
+  {
+    const an = R.anim.get(0);
+    const dx = toX(an.x + an.bx), dy = toY(an.y + an.by);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(dx + ts / 2, dy + ts * 0.9, ts * 0.3, ts * 0.09, 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (g.over && !g.over.won) ctx.globalAlpha = 0.4;
+    drawSprite(ctx, 'player', dx + ts * 0.06, dy + ts * 0.04, ts * 0.88, 1, null, an.flash > 0.5 ? '#ff6b5e' : null);
+    ctx.globalAlpha = 1;
+    if (p.status.haste) { ctx.fillStyle = 'rgba(159,226,255,0.5)'; ctx.fillRect(dx - ts * 0.12, dy + ts * 0.4, ts * 0.12, 2); ctx.fillRect(dx - ts * 0.2, dy + ts * 0.6, ts * 0.16, 2); }
+  }
+
+  // Молнии и лучи
+  for (const b of R.bolts) {
+    b.t += dt;
+    const a = Math.max(0, 1 - b.t * 3);
+    if (!b.pts.length) continue;
+    ctx.strokeStyle = b.color;
+    ctx.globalAlpha = a;
+    ctx.lineWidth = b.thin ? Math.max(2, ts / 10) : Math.max(3, ts / 6);
+    ctx.beginPath();
+    const P = R.anim.get(0);
+    ctx.moveTo(toX(P.x) + ts / 2, toY(P.y) + ts / 2);
+    for (const [x, y] of b.pts) {
+      const j = b.thin ? 0 : (Math.random() - 0.5) * ts * 0.4;
+      ctx.lineTo(toX(x) + ts / 2 + j, toY(y) + ts / 2 + j);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  R.bolts = R.bolts.filter((b) => b.t < 0.34);
+
+  // Снаряды
+  for (const pr of R.projectiles) {
+    pr.t += dt;
+    const n = pr.pts.length;
+    if (!n) continue;
+    const pos = Math.min(n - 1, pr.t * 28);
+    const i = Math.floor(pos), f = pos - i;
+    const [ax, ay] = pr.pts[i], [bx2, by2] = pr.pts[Math.min(n - 1, i + 1)];
+    const x = ax + (bx2 - ax) * f, y = ay + (by2 - ay) * f;
+    if (pr.sprite) drawSprite(ctx, pr.sprite, toX(x) + ts * 0.25, toY(y) + ts * 0.25, ts * 0.5, 1, pr.tint);
+    else { ctx.fillStyle = pr.color; ctx.fillRect(toX(x) + ts * 0.35, toY(y) + ts * 0.45, ts * 0.3, Math.max(2, ts / 12)); }
+  }
+  R.projectiles = R.projectiles.filter((pr) => pr.t * 28 < pr.pts.length + 1);
+
+  // Кольца (взрывы, лай)
+  for (const r of R.rings) {
+    r.t += dt;
+    const k2 = Math.min(1, r.t * 2.5);
+    ctx.globalAlpha = 1 - k2;
+    ctx.strokeStyle = r.color;
+    ctx.lineWidth = Math.max(2, ts / 8);
+    ctx.beginPath();
+    ctx.arc(toX(r.x) + ts / 2, toY(r.y) + ts / 2, (r.r + 0.5) * ts * k2, 0, Math.PI * 2);
+    if (r.fill) { ctx.fillStyle = r.color; ctx.globalAlpha = (1 - k2) * 0.35; ctx.fill(); ctx.globalAlpha = 1 - k2; }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  R.rings = R.rings.filter((r) => r.t < 0.4);
+
+  // Частицы
+  for (const q of R.particles) {
+    q.x += q.vx * dt * 2; q.y += q.vy * dt * 2;
+    q.vy += dt * 2.5; q.vx *= 0.96;
+    q.life -= dt * 1.6;
+    if (q.life <= 0) continue;
+    ctx.globalAlpha = Math.min(1, q.life * 1.5);
+    ctx.fillStyle = q.color;
+    const s = Math.max(2, ts / 10) * q.size;
+    ctx.fillRect(toX(q.x) - s / 2, toY(q.y) - s / 2, s, s);
+  }
+  ctx.globalAlpha = 1;
+  R.particles = R.particles.filter((q) => q.life > 0);
+
+  // Цифры урона
+  ctx.textAlign = 'center';
+  for (const f of R.floats) {
+    f.t += dt;
+    const a = Math.max(0, 1 - f.t * 1.1);
+    const size = Math.max(11, ts * (f.big ? 0.62 : 0.45));
+    ctx.font = `${size}px "Tiny5", monospace`;
+    const fx2 = toX(f.x + 0.5 + f.dx * f.t), fy = toY(f.y) - f.t * ts * 0.9 + ts * 0.2;
+    ctx.globalAlpha = a;
+    ctx.fillStyle = '#000';
+    ctx.fillText(f.text, fx2 + 1, fy + 1);
+    ctx.fillStyle = f.color;
+    ctx.fillText(f.text, fx2, fy);
+  }
+  ctx.globalAlpha = 1;
+  R.floats = R.floats.filter((f) => f.t < 0.95);
+
+  // Прицел
+  if (R.target) {
+    if (R.targetPath) {
+      ctx.fillStyle = 'rgba(255,211,78,0.35)';
+      for (const [x, y] of R.targetPath) ctx.fillRect(toX(x) + ts * 0.4, toY(y) + ts * 0.4, ts * 0.2, ts * 0.2);
+    }
+    const pulse = 0.6 + Math.sin(R.time * 8) * 0.4;
+    ctx.strokeStyle = `rgba(255,211,78,${pulse})`;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(toX(R.target.x) + 1, toY(R.target.y) + 1, ts - 2, ts - 2);
+  } else if (R.hover && lv.seen[idx(R.hover.x, R.hover.y)]) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(toX(R.hover.x) + 0.5, toY(R.hover.y) + 0.5, ts - 1, ts - 1);
+  }
+
+  // Виньетка и эффекты экрана
+  const grad = ctx.createRadialGradient(R.w / 2, R.h / 2, Math.min(R.w, R.h) * 0.35, R.w / 2, R.h / 2, Math.max(R.w, R.h) * 0.75);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, R.w, R.h);
+  if (p.hp < p.maxHp * 0.3 && !g.over) {
+    const a = 0.12 + Math.sin(R.time * 5) * 0.08;
+    ctx.fillStyle = `rgba(200,30,30,${a})`;
+    ctx.fillRect(0, 0, R.w, R.h);
+  }
+  if (R.bossPulse > 0) {
+    ctx.fillStyle = `rgba(160,20,40,${R.bossPulse * 0.4})`;
+    ctx.fillRect(0, 0, R.w, R.h);
+    R.bossPulse = Math.max(0, R.bossPulse - dt * 0.8);
+  }
+  if (R.fadeIn > 0) {
+    ctx.fillStyle = `rgba(0,0,0,${R.fadeIn})`;
+    ctx.fillRect(0, 0, R.w, R.h);
+    R.fadeIn = Math.max(0, R.fadeIn - dt * 1.8);
+  }
+  renderMinimap(g);
+}
+
+function drawSprite(ctx, name, x, y, size, alpha = 1, tint, override) {
+  const s = getSprite(name, tint, override);
+  if (alpha !== 1) ctx.globalAlpha *= alpha;
+  ctx.drawImage(s, Math.round(x), Math.round(y), Math.round(size), Math.round(size));
+  if (alpha !== 1) ctx.globalAlpha /= alpha;
+}
+
+// Экранные координаты → клетка карты
+function screenToTile(clientX, clientY) {
+  const rect = R.canvas.getBoundingClientRect();
+  const x = (clientX - rect.left) / R.ts + R.cam.x;
+  const y = (clientY - rect.top) / R.ts + R.cam.y;
+  return { x: Math.floor(x), y: Math.floor(y) };
+}
+
+let _miniFrame = 0;
+function renderMinimap(g) {
+  if (!R.mini || R.mini.hidden) return;
+  if (++_miniFrame % 6) return;
+  const c = R.mini, ctx = c.getContext('2d');
+  const s = 3;
+  if (c.width !== MAP_W * s) { c.width = MAP_W * s; c.height = MAP_H * s; }
+  const lv = g.level, th = THEMES[lv.theme];
+  ctx.clearRect(0, 0, c.width, c.height);
+  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+    const i = idx(x, y);
+    if (!lv.seen[i]) continue;
+    const t = lv.tiles[i];
+    let col = null;
+    if (t === T.WALL) col = th.wall;
+    else if (t === T.STAIRS) col = '#ffd34e';
+    else if (t === T.WATER) col = th.water;
+    else if (t === T.DOOR || t === T.ODOOR) col = '#a0703a';
+    else if (t === T.BARS) col = '#8a8f9e';
+    else col = lv.visible[i] ? '#6a6070' : '#3a3440';
+    ctx.fillStyle = col;
+    ctx.fillRect(x * s, y * s, s, s);
+  }
+  for (const it of g.items) if (lv.seen[idx(it.x, it.y)]) { ctx.fillStyle = it.kind === 'gold' ? '#ffd34e' : '#8fd3ff'; ctx.fillRect(it.x * s, it.y * s, s, s); }
+  for (const m of g.actors) if (monsterVisible(g, m)) { ctx.fillStyle = MONSTERS[m.type].peaceful ? '#7fe0b0' : '#ff5a4a'; ctx.fillRect(m.x * s, m.y * s, s, s); }
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(g.player.x * s - 1, g.player.y * s - 1, s + 2, s + 2);
+}
+
+// ---- 11_audio.js ----
+// ===== Звук: маленький синтезатор на WebAudio =====
+
+const AUDIO = { ctx: null, on: true, master: null, last: {} };
+
+function audioInit() {
+  if (AUDIO.ctx) { if (AUDIO.ctx.state === 'suspended') AUDIO.ctx.resume(); return; }
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    AUDIO.ctx = new AC();
+    AUDIO.master = AUDIO.ctx.createGain();
+    AUDIO.master.gain.value = 0.22;
+    AUDIO.master.connect(AUDIO.ctx.destination);
+  } catch (e) { AUDIO.ctx = null; }
+}
+
+function tone(freq, dur, type = 'square', vol = 0.5, slide = 0, delay = 0) {
+  const a = AUDIO.ctx;
+  const t = a.currentTime + delay;
+  const o = a.createOscillator(), gn = a.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+  gn.gain.setValueAtTime(vol, t);
+  gn.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(gn); gn.connect(AUDIO.master);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+
+function noise(dur, vol = 0.4, freq = 1200, delay = 0) {
+  const a = AUDIO.ctx;
+  const t = a.currentTime + delay;
+  const len = Math.floor(a.sampleRate * dur);
+  const buf = a.createBuffer(1, len, a.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = a.createBufferSource();
+  src.buffer = buf;
+  const f = a.createBiquadFilter();
+  f.type = 'lowpass'; f.frequency.value = freq;
+  const gn = a.createGain();
+  gn.gain.value = vol;
+  src.connect(f); f.connect(gn); gn.connect(AUDIO.master);
+  src.start(t);
+}
+
+function playSound(name) {
+  if (!AUDIO.on || !AUDIO.ctx) return;
+  // Не долбим один и тот же звук чаще 40 мс
+  const now = performance.now();
+  if (AUDIO.last[name] && now - AUDIO.last[name] < 40) return;
+  AUDIO.last[name] = now;
+  try {
+    switch (name) {
+      case 'hit': noise(0.08, 0.5, 900); tone(140, 0.08, 'square', 0.25, -60); break;
+      case 'miss': tone(500, 0.06, 'triangle', 0.15, 200); break;
+      case 'hurt': noise(0.12, 0.6, 600); tone(110, 0.15, 'sawtooth', 0.3, -50); break;
+      case 'kill': tone(300, 0.08, 'square', 0.2, -200); noise(0.15, 0.3, 500, 0.04); break;
+      case 'coin': tone(988, 0.06, 'square', 0.18); tone(1319, 0.12, 'square', 0.18, 0, 0.06); break;
+      case 'pickup': tone(660, 0.05, 'triangle', 0.25); tone(880, 0.07, 'triangle', 0.25, 0, 0.05); break;
+      case 'equip': noise(0.06, 0.3, 3000); tone(220, 0.06, 'square', 0.15); break;
+      case 'door': noise(0.12, 0.3, 400); break;
+      case 'descend': for (let i = 0; i < 4; i++) tone(440 - i * 70, 0.09, 'triangle', 0.25, 0, i * 0.08); break;
+      case 'levelup': [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.12, 'square', 0.18, 0, i * 0.08)); break;
+      case 'drink': tone(300, 0.15, 'sine', 0.3, 300); tone(500, 0.1, 'sine', 0.2, 200, 0.1); break;
+      case 'eat': noise(0.05, 0.3, 2000); noise(0.05, 0.3, 2000, 0.1); break;
+      case 'scroll': noise(0.18, 0.2, 5000); tone(880, 0.2, 'sine', 0.15, 440); break;
+      case 'zap': tone(1200, 0.2, 'sawtooth', 0.15, -900); noise(0.15, 0.25, 6000); break;
+      case 'throw': noise(0.1, 0.2, 2500); break;
+      case 'glass': tone(2000, 0.05, 'triangle', 0.2); noise(0.15, 0.3, 7000, 0.02); break;
+      case 'boom': noise(0.5, 0.8, 300); tone(80, 0.4, 'sawtooth', 0.4, -40); break;
+      case 'trap': tone(200, 0.1, 'square', 0.3, 400); noise(0.1, 0.4, 1500); break;
+      case 'chest': tone(392, 0.08, 'square', 0.2); tone(523, 0.08, 'square', 0.2, 0, 0.08); tone(784, 0.15, 'square', 0.2, 0, 0.16); break;
+      case 'roar': tone(90, 0.4, 'sawtooth', 0.4, -30); noise(0.4, 0.4, 400); break;
+      case 'summon': tone(200, 0.3, 'sine', 0.3, 400); tone(150, 0.3, 'sine', 0.2, 300, 0.05); break;
+      case 'bark':
+        for (let i = 0; i < 3; i++) { tone(180, 0.09, 'sawtooth', 0.45, -90, i * 0.14); noise(0.08, 0.4, 900, i * 0.14); }
+        break;
+      case 'meow': tone(700, 0.15, 'triangle', 0.3, 300); tone(1000, 0.35, 'triangle', 0.3, -500, 0.15); break;
+      case 'victory': [523, 659, 784, 659, 784, 1047].forEach((f, i) => tone(f, 0.16, 'square', 0.2, 0, i * 0.13)); break;
+      case 'death': [392, 330, 262, 196].forEach((f, i) => tone(f, 0.25, 'triangle', 0.3, 0, i * 0.2)); break;
+      case 'click': tone(800, 0.03, 'square', 0.1); break;
+    }
+  } catch (e) { /* звук не обязателен */ }
+}
+
+// ---- 12_ui.js ----
+// ===== Интерфейс: HUD, окна, управление =====
+
+let G = null;
+const UI = { auto: null, targeting: null, modal: null, endTimer: null, saveTurn: 0, longPress: null, lastLog: null };
+const SAVE_KEY = 'well-save-v1';
+const REC_KEY = 'well-records-v1';
+const SET_KEY = 'well-settings-v1';
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function store(key, val) { try { if (val === null) localStorage.removeItem(key); else localStorage.setItem(key, val); } catch (e) { /* хранилище недоступно */ } }
+function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+
+// ---------- Запуск ----------
+
+function boot(hot) {
+  initRenderer($('view'), $('mini'));
+  const settings = JSON.parse(load(SET_KEY) || '{}');
+  AUDIO.on = settings.sound !== false;
+  if (settings.mini === false) $('mini').hidden = true;
+  syncSoundBtn();
+  bindInput();
+  let restored = null;
+  if (hot && hot.save) { try { restored = deserializeGame(hot.save); } catch (e) { restored = null; } }
+  if (restored) { G = restored; afterAction(true); }
+  else {
+    // Под титулом виден живой уровень: это демо, оно не сохраняется
+    showTitle();
+    G = newGame(Date.now() % 100000);
+    G._demo = true;
+    afterAction(true);
+  }
+  window.addEventListener('resize', () => { resizeRenderer(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveNow(); });
+  window.addEventListener('pagehide', saveNow);
+  if (window.claude && window.claude.hot && window.claude.hot.snapshot) {
+    window.claude.hot.snapshot(() => ({ save: G && !G.over && !G._demo && $('title').hidden ? serializeGame(G) : null }));
+  }
+  let last = performance.now();
+  const frame = (t) => {
+    const dt = Math.min(0.1, Math.max(0, (t - last) / 1000));
+    last = t;
+    if (G) { consumeFx(G); renderFrame(G, dt); }
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
+function startNewGame(seed) {
+  stopAuto();
+  cancelTargeting();
+  clearTimeout(UI.endTimer);
+  G = newGame(seed);
+  UI.lastLog = null;
+  R.mapKey = '';
+  hideTitle();
+  closeModal();
+  afterAction(true);
+  saveNow();
+}
+
+function saveNow() {
+  if (!G) return;
+  if (G._demo) return; // фоновая игра под титулом не сохраняется
+  if (G.over) { store(SAVE_KEY, null); return; }
+  store(SAVE_KEY, serializeGame(G));
+}
+
+// ---------- Действия ----------
+
+function act(fn) {
+  if (!G || G.over || !$('modal').hidden || !$('title').hidden) return false;
+  audioInit();
+  const r = fn();
+  afterAction();
+  return r;
+}
+
+function afterAction(force) {
+  if (!G) return;
+  renderHUD();
+  renderLog();
+  if (G.turn - UI.saveTurn >= 15 || force) { UI.saveTurn = G.turn; if ($('title').hidden) saveNow(); }
+  if (G.over && !UI.endTimer && !G._demo) {
+    stopAuto();
+    cancelTargeting();
+    store(SAVE_KEY, null);
+    addRecord();
+    UI.endTimer = setTimeout(() => { UI.endTimer = null; showEnd(); }, G.over.won ? 1800 : 1400);
+  }
+}
+
+function move(dx, dy) {
+  stopAuto();
+  if (UI.targeting) { moveTarget(dx, dy); return; }
+  if (dx === 0 && dy === 0) { act(() => playerWait(G)); return; }
+  act(() => playerMove(G, dx, dy));
+}
+
+function doPickup() { stopAuto(); act(() => playerPickup(G)); }
+function doDescend() {
+  stopAuto();
+  const p = G.player;
+  if (G.level.stairs && G.level.tiles[idx(p.x, p.y)] !== T.STAIRS && G.level.seen[idx(G.level.stairs.x, G.level.stairs.y)]) {
+    startAuto('travel', G.level.stairs, true);
+    return;
+  }
+  act(() => playerDescend(G));
+  R.mapKey = '';
+  saveNow();
+}
+
+// ---------- Автоходьба ----------
+
+function startAuto(kind, target, descendAtEnd) {
+  stopAuto();
+  if (!G || G.over) return;
+  audioInit();
+  const seen = new Set(visibleEnemies(G).map((m) => m.id));
+  if (kind === 'explore' && seen.size) { msg(G, 'Рядом враг — сначала разберитесь с ним.', 'hint'); renderLog(); return; }
+  UI.auto = { kind, target, descendAtEnd, hp: G.player.hp, seen, msgLen: G.messages.length, steps: 0 };
+  UI.auto.timer = setInterval(autoTick, 55);
+  renderHUD();
+}
+
+function stopAuto(text) {
+  if (!UI.auto) return;
+  clearInterval(UI.auto.timer);
+  UI.auto = null;
+  if (text && G) { msg(G, text, 'hint'); renderLog(); }
+  renderHUD();
+}
+
+function autoTick() {
+  const a = UI.auto;
+  if (!a || !G || G.over || !$('modal').hidden) return stopAuto();
+  const enemies = visibleEnemies(G);
+  if (enemies.some((m) => !a.seen.has(m.id))) {
+    const m = enemies.find((e) => !a.seen.has(e.id));
+    return stopAuto(`Впереди: ${MONSTERS[m.type].name}.`);
+  }
+  if (G.player.hp < a.hp) return stopAuto();
+  if (++a.steps > 400) return stopAuto();
+  const p = G.player;
+  if (a.kind === 'explore') {
+    const r = exploreStep(G);
+    if (r === 'danger') { afterAction(); return stopAuto('Рядом враг.'); }
+    if (r === 'done') {
+      const st = G.level.stairs;
+      if (st && G.level.seen[idx(st.x, st.y)] && !(p.x === st.x && p.y === st.y)) {
+        stopAuto();
+        msg(G, 'Здесь всё исследовано. Идём к лестнице.', 'hint');
+        startAuto('travel', st);
+        return;
+      }
+      afterAction();
+      return stopAuto(st && p.x === st.x && p.y === st.y ? 'Всё исследовано. Вы у лестницы.' : 'Больше исследовать нечего.');
+    }
+    if (r === 'stuck') { afterAction(); return stopAuto('Дальше не пройти.'); }
+  } else {
+    const step = travelStep(G, a.target.x, a.target.y);
+    if (!step) {
+      const there = p.x === a.target.x && p.y === a.target.y;
+      const desc = a.descendAtEnd && there;
+      stopAuto(there ? null : 'Туда не пройти.');
+      if (desc) doDescend();
+      return;
+    }
+    playerMove(G, step[0], step[1]);
+  }
+  afterAction();
+  const fresh = G.messages.slice(a.msgLen);
+  a.msgLen = G.messages.length;
+  if (fresh.some((m) => ['bad', 'boss', 'shop', 'story'].includes(m.cls))) stopAuto();
+}
+
+// ---------- Прицеливание ----------
+
+function startTargeting(item, mode) {
+  stopAuto();
+  closeModal();
+  const t = nearestEnemy(G);
+  UI.targeting = { item, mode };
+  const p = G.player;
+  R.target = t ? { x: t.x, y: t.y } : { x: p.x + 1, y: p.y };
+  updateTargetPath();
+  renderBanner();
+}
+
+function cancelTargeting() {
+  UI.targeting = null;
+  R.target = null;
+  R.targetPath = null;
+  renderBanner();
+}
+
+function moveTarget(dx, dy) {
+  R.target = { x: clamp(R.target.x + dx, 0, MAP_W - 1), y: clamp(R.target.y + dy, 0, MAP_H - 1) };
+  updateTargetPath();
+  renderBanner();
+}
+
+function cycleTarget() {
+  const list = G.actors.filter((a) => !MONSTERS[a.type].peaceful && monsterVisible(G, a) && canSee(G, a.x, a.y))
+    .sort((a, b) => dist(a, G.player) - dist(b, G.player));
+  if (!list.length) return;
+  const cur = list.findIndex((a) => a.x === R.target.x && a.y === R.target.y);
+  const n = list[(cur + 1) % list.length];
+  R.target = { x: n.x, y: n.y };
+  updateTargetPath();
+  renderBanner();
+}
+
+function updateTargetPath() {
+  if (!UI.targeting) return;
+  const range = UI.targeting.mode === 'zap' ? 9 : 8;
+  const stop = !(UI.targeting.mode === 'zap' && UI.targeting.item.type === 'bolt' && isKnown(G, UI.targeting.item));
+  R.targetPath = projectilePath(G, R.target.x, R.target.y, range, stop);
+}
+
+function fireTarget() {
+  const tg = UI.targeting;
+  if (!tg) return;
+  const { x, y } = R.target;
+  if (x === G.player.x && y === G.player.y) { msg(G, 'Нельзя целиться в себя.', 'hint'); renderLog(); return; }
+  cancelTargeting();
+  if (tg.mode === 'zap') act(() => zapWand(G, tg.item, x, y));
+  else act(() => throwItem(G, tg.item, x, y));
+}
+
+function quickFire() {
+  if (UI.targeting) { fireTarget(); return; }
+  const p = G.player;
+  const knife = p.inv.find((o) => o.kind === 'knife');
+  if (knife) { startTargeting(knife, 'throw'); return; }
+  openInventory('throw');
+}
+
+// ---------- HUD и журнал ----------
+
+function renderHUD() {
+  if (!G) return;
+  const p = G.player, th = THEMES[G.level.theme];
+  $('depth').innerHTML = `${esc(th.name)} · <b>${G.depth}</b>`;
+  $('hpfill').style.width = `${Math.max(0, (p.hp / p.maxHp) * 100)}%`;
+  $('hptext').textContent = `${p.hp} / ${p.maxHp}`;
+  $('xpfill').style.width = `${Math.min(100, (p.xp / xpToNext(p.level)) * 100)}%`;
+  $('lvl').textContent = p.level;
+  const d = playerDamage(G);
+  $('dmg').textContent = `${d[0]}–${d[1]}`;
+  $('arm').textContent = playerArmor(G);
+  $('gold').textContent = p.gold;
+  // Статусы
+  const s = p.status, chips = [];
+  if (s.poison) chips.push(['Отравление ' + s.poison, '#7fd36a']);
+  if (s.confused) chips.push(['Помутнение ' + s.confused, '#7fe0b0']);
+  if (s.haste) chips.push(['Ускорение ' + s.haste, '#9fe2ff']);
+  if (s.regen) chips.push(['Регенерация ' + s.regen, '#ff8fa3']);
+  if (G.level.detect) chips.push(['Ясновидение', '#c9b3ff']);
+  if (p.str) chips.push(['Сила +' + p.str, '#ffb347']);
+  const boss = G.actors.find((a) => a.type === 'dog' && a.awake);
+  if (boss) chips.push([`Древний Пёс ${boss.hp}/${boss.maxHp}`, '#ff9ab0']);
+  if (UI.auto) chips.push([UI.auto.kind === 'explore' ? 'Исследую…' : 'Иду…', '#ffb347']);
+  $('chips').innerHTML = chips.map(([t, c]) => `<span class="chip" style="color:${c}">${esc(t)}</span>`).join('');
+  // Кнопки
+  const onStairs = G.level.tiles[idx(p.x, p.y)] === T.STAIRS;
+  $('act-down').classList.toggle('hot', onStairs);
+  const here = itemAt(G, p.x, p.y);
+  $('act-pick').classList.toggle('hot', !!here && here.kind !== 'chest');
+  $('act-pick').firstChild.textContent = here && here.price ? 'Купить' : 'Взять';
+  $('act-explore').classList.toggle('hot', !!UI.auto);
+  $('act-explore').firstChild.textContent = UI.auto ? 'Стоп' : 'Разведка';
+  const knives = p.inv.find((o) => o.kind === 'knife');
+  $('act-fire').firstChild.textContent = UI.targeting ? 'Огонь!' : knives ? `Ножи ×${knives.qty}` : 'Метнуть';
+  $('act-fire').classList.toggle('hot', !!UI.targeting);
+}
+
+function renderLog() {
+  if (!G) return;
+  const last = G.messages.slice(-4);
+  const newest = G.messages.length;
+  const box = $('log');
+  const lastTurn = G.messages.length ? G.messages[G.messages.length - 1].turn : 0;
+  box.innerHTML = last.map((m) => {
+    const fresh = m.turn >= lastTurn - 0;
+    return `<p class="${esc(m.cls)} ${fresh ? 'new' : 'old'}">${esc(m.text)}</p>`;
+  }).join('');
+  UI.lastLog = newest;
+}
+
+function renderBanner() {
+  const b = $('banner');
+  if (!UI.targeting) { b.hidden = true; return; }
+  const a = actorAt(G, R.target.x, R.target.y);
+  const what = a && a !== G.player && monsterVisible(G, a) ? MONSTERS[a.type].name : 'клетка';
+  const verb = UI.targeting.mode === 'zap' ? 'Взмахнуть' : 'Бросить';
+  b.hidden = false;
+  b.innerHTML = `${esc(capitalize(itemName(G, UI.targeting.item)))} → ${esc(what)}
+    <button id="b-fire">${verb}</button><button class="ghost" id="b-cancel">Отмена</button>`;
+  $('b-fire').onclick = fireTarget;
+  $('b-cancel').onclick = cancelTargeting;
+}
+
+// ---------- Описание клетки ----------
+
+function describeTile(x, y) {
+  if (!G || !inBounds(x, y)) return;
+  const lv = G.level;
+  if (!lv.seen[idx(x, y)]) { msg(G, 'Туда вы ещё не заглядывали.', 'hint'); renderLog(); return; }
+  const a = actorAt(G, x, y);
+  if (a === G.player) msg(G, `Это вы. Здоровье ${G.player.hp} из ${G.player.maxHp}.`, 'hint');
+  else if (a && monsterVisible(G, a)) {
+    const d = MONSTERS[a.type];
+    if (a.disguised) msg(G, 'Сундук. Выглядит вполне обычно.', 'hint');
+    else msg(G, `${capitalize(d.name)}${d.peaceful ? '' : ` (${a.hp}/${a.maxHp})`}${!a.awake && !d.peaceful ? ', спит' : ''}. ${d.desc}`, 'hint');
+  } else {
+    const it = itemAt(G, x, y);
+    const tr = trapAt(G, x, y);
+    if (it) msg(G, `${capitalize(itemName(G, it))}${it.price ? ` — ${it.price} мон.` : ''}. ${itemDesc(G, it)}`, 'hint');
+    else if (tr && !tr.hidden) msg(G, `Ловушка: ${trapName(tr.type)}.`, 'hint');
+    else {
+      const names = { [T.WALL]: 'Стена.', [T.FLOOR]: 'Пол.', [T.DOOR]: 'Закрытая дверь.', [T.ODOOR]: 'Открытая дверь.', [T.STAIRS]: 'Лестница вниз.', [T.UPSTAIRS]: 'Сюда вы спустились. Назад пути нет.', [T.WATER]: 'Неглубокая вода.', [T.GRASS]: 'Высокая трава. За ней ничего не видно.', [T.BARS]: 'Решётка клетки.' };
+      msg(G, names[lv.tiles[idx(x, y)]] || 'Что-то непонятное.', 'hint');
+    }
+  }
+  renderLog();
+}
+
+// ---------- Окна ----------
+
+function openModal(html, onReady) {
+  const m = $('modal');
+  m.innerHTML = html;
+  m.hidden = false;
+  stopAuto();
+  const c = m.querySelector('.close');
+  if (c) c.onclick = closeModal;
+  if (onReady) onReady(m);
+}
+function closeModal() {
+  $('modal').hidden = true;
+  $('modal').innerHTML = '';
+  UI.modal = null;
+}
+
+const _iconCache = new Map();
+function iconURL(g, it) {
+  const sprite = itemSprite(g, it), tint = itemTint(g, it);
+  const key = sprite + '|' + tint;
+  if (_iconCache.has(key)) return _iconCache.get(key);
+  const c = document.createElement('canvas');
+  c.width = 32; c.height = 32;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(getSprite(sprite, tint), 0, 0, 32, 32);
+  const url = c.toDataURL();
+  _iconCache.set(key, url);
+  return url;
+}
+
+// mode: undefined — обычный рюкзак; 'throw' — что бросить; {select, scroll} — выбор цели для свитка
+function openInventory(mode, selected) {
+  if (!G) return;
+  const p = G.player;
+  let items = p.inv;
+  let title = 'Рюкзак';
+  let hint = '';
+  if (mode === 'throw') {
+    items = p.inv.filter((o) => ['knife', 'potion', 'food', 'wand'].includes(o.kind));
+    title = 'Что бросить?';
+    hint = items.length ? '' : 'Бросать нечего. Метательные ножи, зелья и сосиски можно найти в подземелье.';
+  } else if (mode && mode.select) {
+    items = mode.select === 'equip'
+      ? p.inv.filter((o) => o.kind === 'weapon' || o.kind === 'armor')
+      : p.inv.filter((o) => !isKnown(G, o) && o !== mode.scroll);
+    title = mode.select === 'equip' ? 'Что улучшить?' : 'Что опознать?';
+    hint = items.length ? '' : 'Подходящих предметов нет.';
+  }
+  const eq = (it) => (p.weapon === it ? 'в руке' : p.armor === it ? 'надето' : '');
+  const list = items.map((it, i) => `
+    <li><button data-i="${p.inv.indexOf(it)}" class="${selected === it ? 'sel' : ''}">
+      <span class="key">${String.fromCharCode(97 + i)}</span>
+      <img src="${iconURL(G, it)}" alt="">
+      <span class="nm">${esc(capitalize(itemName(G, it)))}</span>
+      <span class="tag">${eq(it)}</span>
+    </button></li>`).join('');
+  const W = p.weapon ? capitalize(itemName(G, p.weapon)) : 'кулаки';
+  const A = p.armor ? capitalize(itemName(G, p.armor)) : 'ничего';
+  let detail = '';
+  if (selected && !mode) {
+    const acts = itemActions(G, selected);
+    detail = `<div class="detail"><h3>${esc(capitalize(itemName(G, selected)))}</h3><p>${esc(itemDesc(G, selected))}</p>
+      <div class="row">${acts.map(([k, label], i) => `<button class="btn ${i ? 'ghost' : ''}" data-act="${k}">${esc(label)}<small style="opacity:.6"> ${i + 1}</small></button>`).join('')}</div></div>`;
+  }
+  openModal(`<div class="sheet" role="dialog" aria-label="${esc(title)}">
+    <header><h2>${esc(title)}</h2><span style="color:var(--dim);font:13px var(--font-display)">${p.inv.length}/${INV_SIZE}</span><button class="close" aria-label="Закрыть">×</button></header>
+    <div class="body">
+      ${!mode ? `<div class="equip-row"><div><small>Оружие</small><b>${esc(W)}</b></div><div><small>Броня</small><b>${esc(A)}</b></div></div>` : ''}
+      ${hint ? `<p class="empty">${esc(hint)}</p>` : ''}
+      ${items.length ? `<ul class="inv">${list}</ul>` : !hint ? '<p class="empty">Рюкзак пуст.</p>' : ''}
+      ${detail}
+    </div></div>`, (m) => {
+    UI.modal = { kind: 'inv', mode, items, selected };
+    m.querySelectorAll('.inv button').forEach((b) => {
+      b.onclick = () => pickInvItem(p.inv[Number(b.dataset.i)]);
+    });
+    m.querySelectorAll('[data-act]').forEach((b) => { b.onclick = () => doItemAction(selected, b.dataset.act); });
+    const d = m.querySelector('.detail');
+    if (d) d.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+function pickInvItem(it) {
+  const mode = UI.modal && UI.modal.mode;
+  if (mode === 'throw') {
+    if (it.kind === 'wand') startTargeting(it, 'zap');
+    else startTargeting(it, 'throw');
+    return;
+  }
+  if (mode && mode.select) {
+    const scroll = mode.scroll;
+    closeModal();
+    act(() => useItem(G, scroll, it));
+    return;
+  }
+  openInventory(undefined, it);
+}
+
+function doItemAction(it, action) {
+  playSound('click');
+  switch (action) {
+    case 'equip': closeModal(); act(() => equipItem(G, it)); break;
+    case 'unequip': closeModal(); act(() => unequipItem(G, it)); break;
+    case 'drop': closeModal(); act(() => dropFromInv(G, it)); break;
+    case 'throw': startTargeting(it, 'throw'); break;
+    case 'zap': startTargeting(it, 'zap'); break;
+    case 'use': {
+      closeModal();
+      const r = act(() => useItem(G, it));
+      if (r && r.select) openInventory({ select: r.select, scroll: it });
+      break;
+    }
+  }
+}
+
+function showHelp() {
+  openModal(`<div class="sheet help" role="dialog" aria-label="Как играть">
+    <header><h2>Как играть</h2><button class="close" aria-label="Закрыть">×</button></header>
+    <div class="body">
+      <p>Барсик провалился в колодец. На дне, на десятой глубине, его стережёт Древний Пёс. Спускайтесь, собирайте добычу, становитесь сильнее и верните кота домой.</p>
+      <dl>
+        <dt>Стрелки, WASD, HJKL</dt><dd>Ходить. Идти в монстра — атаковать. Диагонали: Q E Z C или Y U B N.</dd>
+        <dt>Тап по клетке</dt><dd>Идти туда. Тап по соседнему врагу — удар. Долгий тап или правый клик — осмотреть.</dd>
+        <dt>X</dt><dd>Исследовать уровень автоматически. Остановится, если появится враг.</dd>
+        <dt>Пробел или точка</dt><dd>Ждать ход. Заодно ищет ловушки рядом.</dd>
+        <dt>G</dt><dd>Взять или купить предмет под ногами.</dd>
+        <dt>&gt;</dt><dd>Спуститься по лестнице. Если лестница уже найдена, герой сам к ней дойдёт.</dd>
+        <dt>I</dt><dd>Рюкзак. Буквы выбирают предмет, цифры — действие.</dd>
+        <dt>F</dt><dd>Метнуть нож. В режиме прицела: Tab — следующая цель, Enter — огонь.</dd>
+        <dt>M</dt><dd>Мини-карта.</dd>
+      </dl>
+      <p>Зелья, свитки и палочки в каждой игре выглядят по-новому. Узнать, что это, можно только попробовав или с помощью свитка опознания. Плохие зелья лучше бросать во врагов.</p>
+      <p>Сосиски не только едят. Собаки к ним неравнодушны.</p>
+      <p>Игра сохраняется сама. Можно закрыть страницу и вернуться позже.</p>
+    </div></div>`);
+}
+
+function showMenu() {
+  openModal(`<div class="sheet" role="dialog" aria-label="Меню">
+    <header><h2>Пауза</h2><button class="close" aria-label="Закрыть">×</button></header>
+    <div class="body" style="display:grid;gap:8px;padding-top:14px">
+      <button class="btn" id="m-cont">Продолжить</button>
+      <button class="btn ghost" id="m-help">Как играть</button>
+      <button class="btn ghost" id="m-new">Новая игра</button>
+      <p id="m-confirm" hidden style="margin:4px 0 0;color:var(--dim)">Текущий забег пропадёт. Точно? <button class="btn" id="m-yes" style="margin-left:6px">Да, заново</button></p>
+      <button class="btn ghost" id="m-title">Главный экран</button>
+      <p style="color:var(--dim);font-size:13px;margin:6px 0 0">Сид этого забега: <b style="font-family:var(--font-display);color:var(--ink)">${G ? G.seed : '—'}</b>. Тот же сид — те же уровни.</p>
+    </div></div>`, () => {
+    $('m-cont').onclick = closeModal;
+    $('m-help').onclick = showHelp;
+    $('m-new').onclick = () => { $('m-confirm').hidden = false; };
+    $('m-yes').onclick = () => startNewGame();
+    $('m-title').onclick = () => { saveNow(); closeModal(); showTitle(); };
+  });
+}
+
+function showEnd() {
+  if (!G || !G.over) return;
+  const o = G.over, p = G.player;
+  const won = o.won;
+  const lines = won
+    ? ['Барсик спасён!', `Вы выбрались из колодца с котом на руках за ${G.turn} ${plural(G.turn, 'ход', 'хода', 'ходов')}. Барсик делает вид, что так и было задумано.`]
+    : ['Конец пути', `Глубина ${o.depth}. Вас одолел: ${o.cause}. Барсик всё ещё ждёт внизу.`];
+  openModal(`<div class="sheet" role="dialog" aria-label="${esc(lines[0])}">
+    <header><h2>${esc(lines[0])}</h2></header>
+    <div class="body">
+      <p style="margin-top:8px">${esc(lines[1])}</p>
+      <div class="end-stats">
+        <div><small>Очки</small><b style="color:var(--gold)">${o.score}</b></div>
+        <div><small>Глубина</small><b>${G.stats.deepest}</b></div>
+        <div><small>Уровень героя</small><b>${p.level}</b></div>
+        <div><small>Побеждено врагов</small><b>${G.stats.kills}</b></div>
+        <div><small>Монеты</small><b>${p.gold}</b></div>
+        <div><small>Ходов</small><b>${G.turn}</b></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" id="e-again">Ещё раз</button>
+        <button class="btn ghost" id="e-seed">Тот же сид (${G.seed})</button>
+        <button class="btn ghost" id="e-title">Главный экран</button>
+      </div>
+    </div></div>`, () => {
+    $('e-again').onclick = () => startNewGame();
+    $('e-seed').onclick = () => startNewGame(G.seed);
+    $('e-title').onclick = () => { closeModal(); showTitle(); };
+  });
+}
+
+function addRecord() {
+  const recs = JSON.parse(load(REC_KEY) || '[]');
+  const o = G.over;
+  recs.push({ score: o.score, won: o.won, depth: G.stats.deepest, cause: o.cause, level: G.player.level, seed: G.seed, date: Date.now() });
+  recs.sort((a, b) => b.score - a.score);
+  store(REC_KEY, JSON.stringify(recs.slice(0, 8)));
+}
+
+// ---------- Титульный экран ----------
+
+function showTitle() {
+  stopAuto();
+  const t = $('title');
+  const save = load(SAVE_KEY);
+  const recs = JSON.parse(load(REC_KEY) || '[]');
+  t.innerHTML = `
+    <canvas id="t-cat" width="40" height="40" aria-hidden="true"></canvas>
+    <h1>Кот в колодце</h1>
+    <p class="sub">Барсик опять провалился в старый колодец. Внизу десять глубин: подвал, катакомбы, пещеры и логово Древнего Пса. Пошаговый рогалик: каждый спуск новый.</p>
+    <div class="menu">
+      ${save ? '<button class="btn" id="t-cont">Продолжить забег</button>' : ''}
+      <button class="btn ${save ? 'ghost' : ''}" id="t-new">Новая игра</button>
+      <button class="btn ghost" id="t-help">Как играть</button>
+    </div>
+    <div class="seed"><label for="t-seed">Сид (необязательно):</label><input id="t-seed" inputmode="numeric" placeholder="случайный"></div>
+    ${recs.length ? `<div class="records"><h3>Лучшие забеги</h3><ol>${recs.map((r) => `<li><b>${r.score}</b><span>${r.won ? 'Барсик спасён' : `глубина ${r.depth}, ${esc(r.cause || '')}`}</span><span style="flex:none">ур ${r.level}</span></li>`).join('')}</ol></div>` : ''}`;
+  t.hidden = false;
+  if ($('t-cont')) $('t-cont').onclick = () => {
+    try { G = deserializeGame(save); R.mapKey = ''; R.anim.clear(); R.cam.init = false; hideTitle(); afterAction(true); }
+    catch (e) { store(SAVE_KEY, null); startNewGame(); }
+  };
+  $('t-new').onclick = () => {
+    audioInit();
+    const v = $('t-seed').value.trim();
+    startNewGame(v && /^\d+$/.test(v) ? Number(v) : undefined);
+  };
+  $('t-help').onclick = () => showHelp();
+  animateTitleCat();
+}
+
+function hideTitle() { $('title').hidden = true; }
+
+function animateTitleCat() {
+  const c = $('t-cat');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const draw = (t) => {
+    if (!document.body.contains(c) || $('title').hidden) return;
+    ctx.clearRect(0, 0, 40, 40);
+    // Колодец: тёмный круг и каменный обод
+    ctx.fillStyle = '#05040a';
+    ctx.beginPath(); ctx.ellipse(20, 26, 17, 9, 0, 0, Math.PI * 2); ctx.fill();
+    const bob = Math.round(Math.sin(t / 400) * 1.5);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, 40, 27); ctx.clip();
+    ctx.drawImage(getSprite('cat'), 12, 12 + bob, 16, 16);
+    ctx.restore();
+    for (let i = 0; i < 12; i++) {
+      const a = Math.PI + (i / 11) * Math.PI;
+      const x = 20 + Math.cos(a) * 18, y = 26 + Math.sin(a) * 9;
+      ctx.fillStyle = i % 2 ? '#6b4a3a' : '#8a6450';
+      ctx.fillRect(Math.round(x) - 2, Math.round(y) - 1, 4, 3);
+    }
+    ctx.fillStyle = '#6b4a3a'; ctx.fillRect(2, 26, 36, 4);
+    ctx.fillStyle = '#8a6450'; ctx.fillRect(2, 26, 36, 1);
+    for (let x = 4; x < 38; x += 6) { ctx.fillStyle = '#4a3026'; ctx.fillRect(x, 27, 1, 3); }
+    requestAnimationFrame(draw);
+  };
+  requestAnimationFrame(draw);
+}
+
+// ---------- Ввод ----------
+
+const KEYMAP = {
+  ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+  k: [0, -1], j: [0, 1], h: [-1, 0], l: [1, 0], y: [-1, -1], u: [1, -1], b: [-1, 1], n: [1, 1],
+  w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0], q: [-1, -1], e: [1, -1], z: [-1, 1], c: [1, 1],
+  8: [0, -1], 2: [0, 1], 4: [-1, 0], 6: [1, 0], 7: [-1, -1], 9: [1, -1], 1: [-1, 1], 3: [1, 1],
+  Home: [-1, -1], PageUp: [1, -1], End: [-1, 1], PageDown: [1, 1],
+};
+
+function onKey(e) {
+  if (e.target && e.target.tagName === 'INPUT') return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  // Окна
+  if (!$('title').hidden) {
+    if (e.key === 'Enter' && $('modal').hidden) { const b = $('t-cont') || $('t-new'); if (b) { b.click(); e.preventDefault(); } }
+    if (e.key === 'Escape' && !$('modal').hidden) closeModal();
+    return;
+  }
+  if (!$('modal').hidden) {
+    if (e.key === 'Escape') { if (UI.modal && UI.modal.selected) openInventory(); else closeModal(); e.preventDefault(); return; }
+    if (UI.modal && UI.modal.kind === 'inv') {
+      if (/^[a-r]$/.test(key) && !UI.modal.selected) {
+        const it = UI.modal.items[key.charCodeAt(0) - 97];
+        if (it) pickInvItem(it);
+        e.preventDefault();
+      } else if (/^[1-9]$/.test(key) && UI.modal.selected) {
+        const acts = itemActions(G, UI.modal.selected);
+        const a = acts[Number(key) - 1];
+        if (a) doItemAction(UI.modal.selected, a[0]);
+        e.preventDefault();
+      } else if (key === 'i') closeModal();
+    }
+    return;
+  }
+  if (UI.targeting) {
+    if (e.key === 'Escape') { cancelTargeting(); e.preventDefault(); return; }
+    if (e.key === 'Enter' || key === 'f' || key === 't') { fireTarget(); e.preventDefault(); return; }
+    if (e.key === 'Tab') { cycleTarget(); e.preventDefault(); return; }
+  }
+  if (KEYMAP[key] && !(e.shiftKey && key.length === 1 && !/[a-z]/.test(key))) {
+    e.preventDefault();
+    const [dx, dy] = KEYMAP[key];
+    move(dx, dy);
+    return;
+  }
+  switch (key) {
+    case ' ': case '.': case '5': case 'Clear': e.preventDefault(); move(0, 0); break;
+    case 'g': case ',': doPickup(); break;
+    case '>': case 'Enter': doDescend(); break;
+    case 'i': stopAuto(); openInventory(); break;
+    case 'x': if (UI.auto) stopAuto(); else startAuto('explore'); break;
+    case 'f': case 't': quickFire(); break;
+    case 'm': toggleMini(); break;
+    case '?': case '/': showHelp(); break;
+    case 'Escape': if (UI.auto) stopAuto(); else showMenu(); break;
+  }
+}
+
+function toggleMini() {
+  $('mini').hidden = !$('mini').hidden;
+  saveSettings();
+}
+
+function saveSettings() { store(SET_KEY, JSON.stringify({ sound: AUDIO.on, mini: !$('mini').hidden })); }
+function syncSoundBtn() { $('btn-sound').setAttribute('aria-pressed', String(AUDIO.on)); }
+
+function onTapTile(tx, ty) {
+  if (!G || G.over) return;
+  if (UI.targeting) {
+    if (R.target && R.target.x === tx && R.target.y === ty) fireTarget();
+    else { R.target = { x: tx, y: ty }; updateTargetPath(); renderBanner(); }
+    return;
+  }
+  const p = G.player;
+  const dx = tx - p.x, dy = ty - p.y;
+  if (dx === 0 && dy === 0) {
+    const it = itemAt(G, p.x, p.y);
+    if (it && it.kind !== 'chest') doPickup();
+    else if (G.level.tiles[idx(p.x, p.y)] === T.STAIRS) doDescend();
+    else move(0, 0);
+    return;
+  }
+  if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) { move(dx, dy); return; }
+  if (!inBounds(tx, ty) || !G.level.seen[idx(tx, ty)]) return;
+  if (!isPassableTile(G.level.tiles[idx(tx, ty)]) && !actorAt(G, tx, ty)) {
+    // Тап по стене — идём к ближайшей проходимой клетке рядом
+    return;
+  }
+  startAuto('travel', { x: tx, y: ty });
+}
+
+function bindInput() {
+  window.addEventListener('keydown', onKey);
+  const view = $('view');
+  let down = null;
+  view.addEventListener('pointerdown', (e) => {
+    audioInit();
+    down = { x: e.clientX, y: e.clientY, t: performance.now(), long: false };
+    clearTimeout(UI.longPress);
+    if (e.pointerType !== 'mouse') {
+      UI.longPress = setTimeout(() => {
+        if (!down) return;
+        down.long = true;
+        const t = screenToTile(down.x, down.y);
+        describeTile(t.x, t.y);
+        if (navigator.vibrate) try { navigator.vibrate(15); } catch (er) { /* нет вибрации */ }
+      }, 450);
+    }
+  });
+  view.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'mouse') R.hover = screenToTile(e.clientX, e.clientY);
+    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 12) { clearTimeout(UI.longPress); }
+  });
+  view.addEventListener('pointerleave', () => { R.hover = null; });
+  view.addEventListener('pointerup', (e) => {
+    clearTimeout(UI.longPress);
+    if (!down) return;
+    const wasLong = down.long;
+    down = null;
+    if (wasLong || e.button === 2) return;
+    if (!$('modal').hidden || !$('title').hidden) return;
+    const t = screenToTile(e.clientX, e.clientY);
+    if (UI.auto) { stopAuto(); return; }
+    onTapTile(t.x, t.y);
+  });
+  view.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const t = screenToTile(e.clientX, e.clientY);
+    describeTile(t.x, t.y);
+  });
+  // D-pad с автоповтором при удержании
+  document.querySelectorAll('#dpad button').forEach((b) => {
+    let rep = null;
+    const [dx, dy] = b.dataset.d.split(',').map(Number);
+    const fire = () => move(dx, dy);
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      audioInit();
+      fire();
+      clearInterval(rep);
+      rep = setTimeout(() => { rep = setInterval(fire, 120); }, 320);
+    });
+    const stop = () => { clearTimeout(rep); clearInterval(rep); rep = null; };
+    b.addEventListener('pointerup', stop);
+    b.addEventListener('pointerleave', stop);
+    b.addEventListener('pointercancel', stop);
+  });
+  $('act-explore').onclick = () => { if (UI.auto) stopAuto(); else startAuto('explore'); };
+  $('act-pick').onclick = doPickup;
+  $('act-down').onclick = doDescend;
+  $('act-inv').onclick = () => { stopAuto(); openInventory(); };
+  $('act-fire').onclick = quickFire;
+  $('act-wait').onclick = () => move(0, 0);
+  $('btn-sound').onclick = () => { AUDIO.on = !AUDIO.on; audioInit(); syncSoundBtn(); saveSettings(); };
+  $('btn-help').onclick = showHelp;
+  $('btn-menu').onclick = showMenu;
+  $('mini').onclick = toggleMini;
+  $('modal').addEventListener('pointerdown', (e) => { if (e.target === $('modal') && (!G || !G.over)) closeModal(); });
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => resizeRenderer()).observe($('stage'));
+}
+
+// ---- 13_main.js ----
+// ===== Точка входа =====
+
+(function start() {
+  const go = () => {
+    const hot = window.claude && window.claude.hot;
+    if (hot && hot.ready) hot.ready(boot);
+    else boot((hot && hot.data) || {});
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
+  else go();
+})();
+
+</script>
