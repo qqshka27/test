@@ -294,6 +294,7 @@ function renderHUD() {
   if (s.regen) chips.push(['Регенерация ' + s.regen, '#ff8fa3']);
   if (G.level.detect) chips.push(['Ясновидение', '#c9b3ff']);
   if (p.str) chips.push(['Сила +' + p.str, '#ffb347']);
+  if (G.stats.yarn) chips.push(['Клубки ' + G.stats.yarn + '/9', '#f07fb4']);
   const boss = G.actors.find((a) => a.type === 'dog' && a.awake);
   if (boss) chips.push([`Древний Пёс ${boss.hp}/${boss.maxHp}`, '#ff9ab0']);
   if (UI.auto) chips.push([UI.auto.kind === 'explore' ? 'Исследую…' : 'Иду…', '#ffb347']);
@@ -355,7 +356,7 @@ function describeTile(x, y) {
     if (it) msg(G, `${capitalize(itemName(G, it))}${it.price ? ` — ${it.price} мон.` : ''}. ${itemDesc(G, it)}`, 'hint');
     else if (tr && !tr.hidden) msg(G, `Ловушка: ${trapName(tr.type)}.`, 'hint');
     else {
-      const names = { [T.WALL]: 'Стена.', [T.FLOOR]: 'Пол.', [T.DOOR]: 'Закрытая дверь.', [T.ODOOR]: 'Открытая дверь.', [T.STAIRS]: 'Лестница вниз.', [T.UPSTAIRS]: 'Сюда вы спустились. Назад пути нет.', [T.WATER]: 'Неглубокая вода.', [T.GRASS]: 'Высокая трава. За ней ничего не видно.', [T.BARS]: 'Решётка клетки.', [T.FOUNTAIN]: 'Фонтан. Можно попить, если не боитесь.', [T.DRY]: 'Высохший фонтан.' };
+      const names = { [T.WALL]: 'Стена.', [T.FLOOR]: 'Пол.', [T.DOOR]: 'Закрытая дверь.', [T.ODOOR]: 'Открытая дверь.', [T.STAIRS]: 'Лестница вниз.', [T.UPSTAIRS]: 'Сюда вы спустились. Назад пути нет.', [T.WATER]: 'Неглубокая вода.', [T.GRASS]: 'Высокая трава. За ней ничего не видно.', [T.BARS]: 'Решётка клетки.', [T.FOUNTAIN]: 'Фонтан. Можно попить, если не боитесь.', [T.DRY]: 'Высохший фонтан.', [T.ALTAR]: `Алтарь со свечами. За ${altarCost(G)} монет даёт благословение.`, [T.ALTAR_OFF]: 'Погасший алтарь.' };
       msg(G, names[lv.tiles[idx(x, y)]] || 'Что-то непонятное.', 'hint');
     }
   }
@@ -547,6 +548,8 @@ function showEnd() {
         <div><small>Побеждено врагов</small><b>${G.stats.kills}</b></div>
         <div><small>Монеты</small><b>${p.gold}</b></div>
         <div><small>Ходов</small><b>${G.turn}</b></div>
+        <div><small>Зелий и свитков</small><b>${(G.stats.potions || 0) + (G.stats.scrolls || 0)}</b></div>
+        <div><small>Клубков для Барсика</small><b style="color:#f07fb4">${G.stats.yarn || 0} / 9</b></div>
       </div>
       ${chronicleHTML()}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -765,7 +768,7 @@ function onTapTile(tx, ty) {
   }
   if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) { move(dx, dy); return; }
   if (!inBounds(tx, ty) || !G.level.seen[idx(tx, ty)]) return;
-  if (!isPassableTile(G.level.tiles[idx(tx, ty)]) && !actorAt(G, tx, ty) && G.level.tiles[idx(tx, ty)] !== T.FOUNTAIN) {
+  if (!isPassableTile(G.level.tiles[idx(tx, ty)]) && !actorAt(G, tx, ty) && G.level.tiles[idx(tx, ty)] !== T.FOUNTAIN && G.level.tiles[idx(tx, ty)] !== T.ALTAR) {
     // Тап по стене — идём к ближайшей проходимой клетке рядом
     return;
   }

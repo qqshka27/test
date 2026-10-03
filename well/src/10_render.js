@@ -156,6 +156,16 @@ function drawTilePixels(ctx, lv, th, x, y) {
       if (t === T.FOUNTAIN) px(ctx, '#bfe6ff', X + 3, Y + 4, 1, 1);
       break;
     }
+    case T.ALTAR:
+    case T.ALTAR_OFF:
+      drawFloorPixels(ctx, th, X, Y, x, y);
+      px(ctx, '#6a6478', X + 1, Y + 3, 6, 5);
+      px(ctx, '#8f88a0', X, Y + 3, 8, 1);
+      px(ctx, '#4a4458', X + 1, Y + 7, 6, 1);
+      px(ctx, '#e8dcc0', X + 2, Y + 1, 1, 2);
+      px(ctx, '#e8dcc0', X + 5, Y + 1, 1, 2);
+      px(ctx, '#c9a227', X + 3, Y + 5, 2, 1);
+      break;
     case T.BARS:
       drawFloorPixels(ctx, th, X, Y, x, y);
       for (let i = 0; i < 4; i++) px(ctx, '#8a8f9e', X + 1 + i * 2, Y, 1, 8);
@@ -277,6 +287,17 @@ function renderFrame(g, dt) {
         const s2 = Math.max(2, ts / 12);
         ctx.fillRect(toX(x) + ts * (0.5 + (k2 - 1) * 0.18 * ph) - s2 / 2, toY(y) + ts * (0.2 - Math.sin(ph * Math.PI) * 0.15 + ph * 0.25), s2, s2);
       }
+    }
+  }
+
+  // Огоньки свечей на алтарях
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    if (lv.tiles[idx(x, y)] === T.ALTAR && lv.visible[idx(x, y)]) {
+      const fl = Math.sin(R.time * 9 + x) * 0.5 + 0.5;
+      ctx.fillStyle = `rgba(255,${190 + fl * 40 | 0},90,${0.75 + fl * 0.25})`;
+      const s2 = Math.max(2, ts / 8);
+      ctx.fillRect(toX(x) + ts * 2 / 8, toY(y) + ts * 0.02 - fl * s2 * 0.3, s2, s2);
+      ctx.fillRect(toX(x) + ts * 5 / 8, toY(y) + ts * 0.02 - (1 - fl) * s2 * 0.3, s2, s2);
     }
   }
 
@@ -558,11 +579,12 @@ function renderMinimap(g) {
     else if (t === T.DOOR || t === T.ODOOR) col = '#a0703a';
     else if (t === T.BARS) col = '#8a8f9e';
     else if (t === T.FOUNTAIN) col = '#4f9fe0';
+    else if (t === T.ALTAR) col = '#fff3b0';
     else col = lv.visible[i] ? '#6a6070' : '#3a3440';
     ctx.fillStyle = col;
     ctx.fillRect(x * s, y * s, s, s);
   }
-  for (const it of g.items) if (lv.seen[idx(it.x, it.y)]) { ctx.fillStyle = it.kind === 'gold' ? '#ffd34e' : '#8fd3ff'; ctx.fillRect(it.x * s, it.y * s, s, s); }
+  for (const it of g.items) if (lv.seen[idx(it.x, it.y)]) { ctx.fillStyle = it.kind === 'gold' ? '#ffd34e' : it.kind === 'yarn' ? '#f07fb4' : '#8fd3ff'; ctx.fillRect(it.x * s, it.y * s, s, s); }
   for (const m of g.actors) if (monsterVisible(g, m)) { ctx.fillStyle = MONSTERS[m.type].peaceful ? '#7fe0b0' : '#ff5a4a'; ctx.fillRect(m.x * s, m.y * s, s, s); }
   ctx.fillStyle = '#fff';
   ctx.fillRect(g.player.x * s - 1, g.player.y * s - 1, s + 2, s + 2);

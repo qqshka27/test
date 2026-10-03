@@ -219,6 +219,14 @@ function generateLevel(depth, rng) {
       if (tiles[idx(c.x, c.y)] === T.FLOOR) tiles[idx(c.x, c.y)] = T.FOUNTAIN;
     }
   }
+  // Алтарь у стены какой-нибудь комнаты
+  if (rooms.length && depth >= 2 && rng.chance(0.35)) {
+    const r = rng.pick(rooms);
+    const c = roomCenter(r);
+    const ay = r.y; // верхний ряд комнаты, под стеной
+    const wallAbove = tiles[idx(c.x, ay - 1)] === T.WALL;
+    if (wallAbove && tiles[idx(c.x, ay)] === T.FLOOR && tiles[idx(c.x, ay + 1)] === T.FLOOR && r.h >= 3) tiles[idx(c.x, ay)] = T.ALTAR;
+  }
   return { tiles, rooms, start, stairs: far, theme };
 }
 

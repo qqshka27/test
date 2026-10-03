@@ -59,6 +59,7 @@ function itemName(g, it) {
     case 'food': return FOODS[it.type].name + q;
     case 'knife': return 'метательный нож' + q;
     case 'gold': return `${it.qty} ${plural(it.qty, 'монета', 'монеты', 'монет')}`;
+    case 'yarn': return 'клубок шерсти';
     case 'chest': return 'сундук';
     default: return '???';
   }
@@ -74,6 +75,7 @@ function itemSprite(g, it) {
     case 'food': return FOODS[it.type].sprite;
     case 'knife': return 'knife';
     case 'gold': return 'gold';
+    case 'yarn': return 'yarn';
     case 'chest': return 'chest';
   }
   return 'potion';

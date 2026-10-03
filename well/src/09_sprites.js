@@ -78,6 +78,16 @@ const SPRITES = {
     '..dddd..',
     '........',
   ],
+  yarn: [
+    '........',
+    '..rrrr..',
+    '.rprrpr.',
+    'rrpprrrr',
+    'rprrpprr',
+    '.rrrprr.',
+    '..rrrr.r',
+    '......r.',
+  ],
   rat: [
     '........',
     '........',

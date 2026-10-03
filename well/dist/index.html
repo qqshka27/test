@@ -297,6 +297,8 @@ const T = {
   BARS: 9, // решётка клетки: непроходима, но прозрачна
   FOUNTAIN: 10, // фонтан: из него пьют, подойдя вплотную
   DRY: 11, // высохший фонтан
+  ALTAR: 12, // алтарь: благословение за монеты
+  ALTAR_OFF: 13, // погасший алтарь
 };
 
 const DIRS8 = [
@@ -591,6 +593,8 @@ const ACHIEVEMENTS = {
   rich:        ['Богач', 'Накопить 500 монет.'],
   veteran:     ['Ветеран', 'Достичь 8 уровня.'],
   mole:        ['Крот', 'Прорыть стену палочкой копания.'],
+  yarn:        ['Клубочек к клубочку', 'Собрать все девять клубков для Барсика.'],
+  blessed:     ['Благодать', 'Получить благословение на алтаре.'],
 };
 
 // Фразы на входе в уровень: следы Барсика
@@ -828,6 +832,14 @@ function generateLevel(depth, rng) {
       if (tiles[idx(c.x, c.y)] === T.FLOOR) tiles[idx(c.x, c.y)] = T.FOUNTAIN;
     }
   }
+  // Алтарь у стены какой-нибудь комнаты
+  if (rooms.length && depth >= 2 && rng.chance(0.35)) {
+    const r = rng.pick(rooms);
+    const c = roomCenter(r);
+    const ay = r.y; // верхний ряд комнаты, под стеной
+    const wallAbove = tiles[idx(c.x, ay - 1)] === T.WALL;
+    if (wallAbove && tiles[idx(c.x, ay)] === T.FLOOR && tiles[idx(c.x, ay + 1)] === T.FLOOR && r.h >= 3) tiles[idx(c.x, ay)] = T.ALTAR;
+  }
   return { tiles, rooms, start, stairs: far, theme };
 }
 
@@ -1009,6 +1021,7 @@ function itemName(g, it) {
     case 'food': return FOODS[it.type].name + q;
     case 'knife': return 'метательный нож' + q;
     case 'gold': return `${it.qty} ${plural(it.qty, 'монета', 'монеты', 'монет')}`;
+    case 'yarn': return 'клубок шерсти';
     case 'chest': return 'сундук';
     default: return '???';
   }
@@ -1024,6 +1037,7 @@ function itemSprite(g, it) {
     case 'food': return FOODS[it.type].sprite;
     case 'knife': return 'knife';
     case 'gold': return 'gold';
+    case 'yarn': return 'yarn';
     case 'chest': return 'chest';
   }
   return 'potion';
@@ -1369,6 +1383,11 @@ function populate(g) {
     if (!p) continue;
     g.items.push(makeItem('gold', 'gold', { qty: rng.int(4, 10) + depth * rng.int(2, 5), x: p.x, y: p.y }));
   }
+  // Клубок шерсти для Барсика — по одному на уровень, подальше от входа
+  {
+    const p = placeFree(12) || placeFree(6);
+    if (p) g.items.push(makeItem('yarn', 'yarn', { x: p.x, y: p.y }));
+  }
   // Сундуки и мимики
   if (rng.chance(0.55)) {
     const p = placeFree(4);
@@ -1645,6 +1664,8 @@ function gameOver(g, won, cause) {
   chron(g, won ? 'Спас Барсика' : `Пал в бою. Причина: ${cause}`);
   if (won) {
     achieve(g, 'rescue');
+    const y = g.stats.yarn || 0;
+    if (y) msg(g, y >= 9 ? 'Вы высыпаете перед Барсиком все девять клубков. Это лучший день в его жизни.' : `Барсик обнюхивает ${y} ${plural(y, 'клубок', 'клубка', 'клубков')} и милостиво прощает вам опоздание.`, 'boss');
     if (g.hero === 'granny') achieve(g, 'granny_win');
     if (g.hero === 'janitor') achieve(g, 'janitor_win');
     if (g.turn < 2500) achieve(g, 'fast');
@@ -1656,7 +1677,7 @@ function gameOver(g, won, cause) {
 }
 
 function computeScore(g, won) {
-  return g.player.gold + g.stats.deepest * 150 + g.stats.kills * 10 + g.player.level * 25 + (won ? 3000 - Math.min(2000, Math.floor(g.turn / 2)) : 0);
+  return g.player.gold + (g.stats.yarn || 0) * 50 + g.stats.deepest * 150 + g.stats.kills * 10 + g.player.level * 25 + (won ? 3000 - Math.min(2000, Math.floor(g.turn / 2)) : 0);
 }
 
 // ---------- Предметы на полу ----------
@@ -1712,6 +1733,16 @@ function pickUp(g, buy) {
   const p = g.player;
   const it = itemAt(g, p.x, p.y);
   if (!it || it.kind === 'chest') return false;
+  if (it.kind === 'yarn') {
+    g.stats.yarn = (g.stats.yarn || 0) + 1;
+    g.items = g.items.filter((o) => o !== it);
+    msg(g, `Клубок шерсти! Барсик такие обожает. Собрано: ${g.stats.yarn} из 9.`, 'loot');
+    fx(g, { type: 'sound', name: 'pickup' });
+    fx(g, { type: 'particles', x: p.x, y: p.y, color: '#f07fb4', n: 10 });
+    if (g.stats.yarn === 1) tip(g, 'yarn', 'На каждой глубине спрятан один клубок. Барсик оценит.');
+    if (g.stats.yarn >= 9) { achieve(g, 'yarn'); chron(g, 'Собрал все клубки'); }
+    return true;
+  }
   if (it.kind === 'gold') {
     p.gold += it.qty; g.stats.goldFound += it.qty;
     if (p.gold >= 500) achieve(g, 'rich');
@@ -1822,6 +1853,8 @@ function playerMove(g, dx, dy) {
     return endTurn(g);
   }
   if (t === T.FOUNTAIN) return drinkFountain(g, nx, ny);
+  if (t === T.ALTAR) return prayAltar(g, nx, ny);
+  if (t === T.ALTAR_OFF) { msg(g, 'Свечи на алтаре погасли. Здесь больше ничего не произойдёт.', 'info'); return false; }
   if (t === T.DRY) { msg(g, 'Фонтан высох. Только мох и пара монеток на дне... нет, показалось.', 'info'); return false; }
   if (t === T.BARS) {
     msg(g, 'Прочная решётка. Сквозь неё виден Барсик.', 'info');
@@ -1889,6 +1922,48 @@ function drinkFountain(g, x, y) {
   }
   chron(g, 'Выпил из фонтана');
   achieve(g, 'fountain');
+  return endTurn(g);
+}
+
+function altarCost(g) { return 20 + g.depth * 12; }
+
+function prayAltar(g, x, y) {
+  const p = g.player, rng = g.rng;
+  const cost = altarCost(g);
+  if (p.gold < cost) {
+    msg(g, `На алтаре надпись: «Оставь ${cost} ${plural(cost, 'монету', 'монеты', 'монет')} и получишь благословение». У вас ${p.gold}.`, 'info');
+    return false;
+  }
+  p.gold -= cost;
+  g.level.tiles[idx(x, y)] = T.ALTAR_OFF;
+  fx(g, { type: 'sound', name: 'levelup' });
+  fx(g, { type: 'particles', x: p.x, y: p.y, color: '#fff3b0', n: 22 });
+  const opts = [['vigor', 3]];
+  if (p.weapon) opts.push(['weapon', 3]);
+  if (p.armor) opts.push(['armor', 3]);
+  if (p.inv.some((o) => !isKnown(g, o))) opts.push(['wisdom', 2]);
+  const b = rng.weighted(opts);
+  msg(g, `Вы оставляете ${cost} ${plural(cost, 'монету', 'монеты', 'монет')} на алтаре. Свечи вспыхивают и гаснут.`, 'info');
+  switch (b) {
+    case 'vigor':
+      p.maxHp += 4; p.hp = p.maxHp;
+      msg(g, 'Благословение здоровья: раны исчезли, а сил прибавилось. (+4 к здоровью)', 'good');
+      break;
+    case 'weapon':
+      p.weapon.ench++;
+      msg(g, `Благословение оружия: ${itemName(g, p.weapon)}.`, 'good');
+      break;
+    case 'armor':
+      p.armor.ench++;
+      msg(g, `Благословение брони: ${itemName(g, p.armor)}.`, 'good');
+      break;
+    case 'wisdom':
+      for (const o of p.inv) if (g.known[o.kind]) g.known[o.kind][o.type] = true;
+      msg(g, 'Благословение мудрости: вы понимаете, что лежит у вас в рюкзаке.', 'good');
+      break;
+  }
+  achieve(g, 'blessed');
+  chron(g, 'Получил благословение на алтаре');
   return endTurn(g);
 }
 
@@ -2785,6 +2860,7 @@ function exploreGoals(g) {
     if (tr && !tr.hidden) continue;
     goals.push({ x: it.x, y: it.y });
   }
+  // Алтари стоит хотя бы показать — к ним путь не ведём, это решение игрока
   // Замаскированные мимики выглядят как сундуки — исследователь к ним тоже идёт
   for (const a of g.actors) if (a.disguised && lv.seen[idx(a.x, a.y)]) goals.push({ x: a.x, y: a.y });
   return goals;
@@ -2927,6 +3003,16 @@ const SPRITES = {
     '..kkkk..',
     '..dddd..',
     '........',
+  ],
+  yarn: [
+    '........',
+    '..rrrr..',
+    '.rprrpr.',
+    'rrpprrrr',
+    'rprrpprr',
+    '.rrrprr.',
+    '..rrrr.r',
+    '......r.',
   ],
   rat: [
     '........',
@@ -3504,6 +3590,16 @@ function drawTilePixels(ctx, lv, th, x, y) {
       if (t === T.FOUNTAIN) px(ctx, '#bfe6ff', X + 3, Y + 4, 1, 1);
       break;
     }
+    case T.ALTAR:
+    case T.ALTAR_OFF:
+      drawFloorPixels(ctx, th, X, Y, x, y);
+      px(ctx, '#6a6478', X + 1, Y + 3, 6, 5);
+      px(ctx, '#8f88a0', X, Y + 3, 8, 1);
+      px(ctx, '#4a4458', X + 1, Y + 7, 6, 1);
+      px(ctx, '#e8dcc0', X + 2, Y + 1, 1, 2);
+      px(ctx, '#e8dcc0', X + 5, Y + 1, 1, 2);
+      px(ctx, '#c9a227', X + 3, Y + 5, 2, 1);
+      break;
     case T.BARS:
       drawFloorPixels(ctx, th, X, Y, x, y);
       for (let i = 0; i < 4; i++) px(ctx, '#8a8f9e', X + 1 + i * 2, Y, 1, 8);
@@ -3625,6 +3721,17 @@ function renderFrame(g, dt) {
         const s2 = Math.max(2, ts / 12);
         ctx.fillRect(toX(x) + ts * (0.5 + (k2 - 1) * 0.18 * ph) - s2 / 2, toY(y) + ts * (0.2 - Math.sin(ph * Math.PI) * 0.15 + ph * 0.25), s2, s2);
       }
+    }
+  }
+
+  // Огоньки свечей на алтарях
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    if (lv.tiles[idx(x, y)] === T.ALTAR && lv.visible[idx(x, y)]) {
+      const fl = Math.sin(R.time * 9 + x) * 0.5 + 0.5;
+      ctx.fillStyle = `rgba(255,${190 + fl * 40 | 0},90,${0.75 + fl * 0.25})`;
+      const s2 = Math.max(2, ts / 8);
+      ctx.fillRect(toX(x) + ts * 2 / 8, toY(y) + ts * 0.02 - fl * s2 * 0.3, s2, s2);
+      ctx.fillRect(toX(x) + ts * 5 / 8, toY(y) + ts * 0.02 - (1 - fl) * s2 * 0.3, s2, s2);
     }
   }
 
@@ -3906,11 +4013,12 @@ function renderMinimap(g) {
     else if (t === T.DOOR || t === T.ODOOR) col = '#a0703a';
     else if (t === T.BARS) col = '#8a8f9e';
     else if (t === T.FOUNTAIN) col = '#4f9fe0';
+    else if (t === T.ALTAR) col = '#fff3b0';
     else col = lv.visible[i] ? '#6a6070' : '#3a3440';
     ctx.fillStyle = col;
     ctx.fillRect(x * s, y * s, s, s);
   }
-  for (const it of g.items) if (lv.seen[idx(it.x, it.y)]) { ctx.fillStyle = it.kind === 'gold' ? '#ffd34e' : '#8fd3ff'; ctx.fillRect(it.x * s, it.y * s, s, s); }
+  for (const it of g.items) if (lv.seen[idx(it.x, it.y)]) { ctx.fillStyle = it.kind === 'gold' ? '#ffd34e' : it.kind === 'yarn' ? '#f07fb4' : '#8fd3ff'; ctx.fillRect(it.x * s, it.y * s, s, s); }
   for (const m of g.actors) if (monsterVisible(g, m)) { ctx.fillStyle = MONSTERS[m.type].peaceful ? '#7fe0b0' : '#ff5a4a'; ctx.fillRect(m.x * s, m.y * s, s, s); }
   ctx.fillStyle = '#fff';
   ctx.fillRect(g.player.x * s - 1, g.player.y * s - 1, s + 2, s + 2);
@@ -4320,6 +4428,7 @@ function renderHUD() {
   if (s.regen) chips.push(['Регенерация ' + s.regen, '#ff8fa3']);
   if (G.level.detect) chips.push(['Ясновидение', '#c9b3ff']);
   if (p.str) chips.push(['Сила +' + p.str, '#ffb347']);
+  if (G.stats.yarn) chips.push(['Клубки ' + G.stats.yarn + '/9', '#f07fb4']);
   const boss = G.actors.find((a) => a.type === 'dog' && a.awake);
   if (boss) chips.push([`Древний Пёс ${boss.hp}/${boss.maxHp}`, '#ff9ab0']);
   if (UI.auto) chips.push([UI.auto.kind === 'explore' ? 'Исследую…' : 'Иду…', '#ffb347']);
@@ -4381,7 +4490,7 @@ function describeTile(x, y) {
     if (it) msg(G, `${capitalize(itemName(G, it))}${it.price ? ` — ${it.price} мон.` : ''}. ${itemDesc(G, it)}`, 'hint');
     else if (tr && !tr.hidden) msg(G, `Ловушка: ${trapName(tr.type)}.`, 'hint');
     else {
-      const names = { [T.WALL]: 'Стена.', [T.FLOOR]: 'Пол.', [T.DOOR]: 'Закрытая дверь.', [T.ODOOR]: 'Открытая дверь.', [T.STAIRS]: 'Лестница вниз.', [T.UPSTAIRS]: 'Сюда вы спустились. Назад пути нет.', [T.WATER]: 'Неглубокая вода.', [T.GRASS]: 'Высокая трава. За ней ничего не видно.', [T.BARS]: 'Решётка клетки.', [T.FOUNTAIN]: 'Фонтан. Можно попить, если не боитесь.', [T.DRY]: 'Высохший фонтан.' };
+      const names = { [T.WALL]: 'Стена.', [T.FLOOR]: 'Пол.', [T.DOOR]: 'Закрытая дверь.', [T.ODOOR]: 'Открытая дверь.', [T.STAIRS]: 'Лестница вниз.', [T.UPSTAIRS]: 'Сюда вы спустились. Назад пути нет.', [T.WATER]: 'Неглубокая вода.', [T.GRASS]: 'Высокая трава. За ней ничего не видно.', [T.BARS]: 'Решётка клетки.', [T.FOUNTAIN]: 'Фонтан. Можно попить, если не боитесь.', [T.DRY]: 'Высохший фонтан.', [T.ALTAR]: `Алтарь со свечами. За ${altarCost(G)} монет даёт благословение.`, [T.ALTAR_OFF]: 'Погасший алтарь.' };
       msg(G, names[lv.tiles[idx(x, y)]] || 'Что-то непонятное.', 'hint');
     }
   }
@@ -4573,6 +4682,8 @@ function showEnd() {
         <div><small>Побеждено врагов</small><b>${G.stats.kills}</b></div>
         <div><small>Монеты</small><b>${p.gold}</b></div>
         <div><small>Ходов</small><b>${G.turn}</b></div>
+        <div><small>Зелий и свитков</small><b>${(G.stats.potions || 0) + (G.stats.scrolls || 0)}</b></div>
+        <div><small>Клубков для Барсика</small><b style="color:#f07fb4">${G.stats.yarn || 0} / 9</b></div>
       </div>
       ${chronicleHTML()}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -4791,7 +4902,7 @@ function onTapTile(tx, ty) {
   }
   if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) { move(dx, dy); return; }
   if (!inBounds(tx, ty) || !G.level.seen[idx(tx, ty)]) return;
-  if (!isPassableTile(G.level.tiles[idx(tx, ty)]) && !actorAt(G, tx, ty) && G.level.tiles[idx(tx, ty)] !== T.FOUNTAIN) {
+  if (!isPassableTile(G.level.tiles[idx(tx, ty)]) && !actorAt(G, tx, ty) && G.level.tiles[idx(tx, ty)] !== T.FOUNTAIN && G.level.tiles[idx(tx, ty)] !== T.ALTAR) {
     // Тап по стене — идём к ближайшей проходимой клетке рядом
     return;
   }

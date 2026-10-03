@@ -234,6 +234,11 @@ function populate(g) {
     if (!p) continue;
     g.items.push(makeItem('gold', 'gold', { qty: rng.int(4, 10) + depth * rng.int(2, 5), x: p.x, y: p.y }));
   }
+  // Клубок шерсти для Барсика — по одному на уровень, подальше от входа
+  {
+    const p = placeFree(12) || placeFree(6);
+    if (p) g.items.push(makeItem('yarn', 'yarn', { x: p.x, y: p.y }));
+  }
   // Сундуки и мимики
   if (rng.chance(0.55)) {
     const p = placeFree(4);
@@ -510,6 +515,8 @@ function gameOver(g, won, cause) {
   chron(g, won ? 'Спас Барсика' : `Пал в бою. Причина: ${cause}`);
   if (won) {
     achieve(g, 'rescue');
+    const y = g.stats.yarn || 0;
+    if (y) msg(g, y >= 9 ? 'Вы высыпаете перед Барсиком все девять клубков. Это лучший день в его жизни.' : `Барсик обнюхивает ${y} ${plural(y, 'клубок', 'клубка', 'клубков')} и милостиво прощает вам опоздание.`, 'boss');
     if (g.hero === 'granny') achieve(g, 'granny_win');
     if (g.hero === 'janitor') achieve(g, 'janitor_win');
     if (g.turn < 2500) achieve(g, 'fast');
@@ -521,7 +528,7 @@ function gameOver(g, won, cause) {
 }
 
 function computeScore(g, won) {
-  return g.player.gold + g.stats.deepest * 150 + g.stats.kills * 10 + g.player.level * 25 + (won ? 3000 - Math.min(2000, Math.floor(g.turn / 2)) : 0);
+  return g.player.gold + (g.stats.yarn || 0) * 50 + g.stats.deepest * 150 + g.stats.kills * 10 + g.player.level * 25 + (won ? 3000 - Math.min(2000, Math.floor(g.turn / 2)) : 0);
 }
 
 // ---------- Предметы на полу ----------
@@ -577,6 +584,16 @@ function pickUp(g, buy) {
   const p = g.player;
   const it = itemAt(g, p.x, p.y);
   if (!it || it.kind === 'chest') return false;
+  if (it.kind === 'yarn') {
+    g.stats.yarn = (g.stats.yarn || 0) + 1;
+    g.items = g.items.filter((o) => o !== it);
+    msg(g, `Клубок шерсти! Барсик такие обожает. Собрано: ${g.stats.yarn} из 9.`, 'loot');
+    fx(g, { type: 'sound', name: 'pickup' });
+    fx(g, { type: 'particles', x: p.x, y: p.y, color: '#f07fb4', n: 10 });
+    if (g.stats.yarn === 1) tip(g, 'yarn', 'На каждой глубине спрятан один клубок. Барсик оценит.');
+    if (g.stats.yarn >= 9) { achieve(g, 'yarn'); chron(g, 'Собрал все клубки'); }
+    return true;
+  }
   if (it.kind === 'gold') {
     p.gold += it.qty; g.stats.goldFound += it.qty;
     if (p.gold >= 500) achieve(g, 'rich');
@@ -687,6 +704,8 @@ function playerMove(g, dx, dy) {
     return endTurn(g);
   }
   if (t === T.FOUNTAIN) return drinkFountain(g, nx, ny);
+  if (t === T.ALTAR) return prayAltar(g, nx, ny);
+  if (t === T.ALTAR_OFF) { msg(g, 'Свечи на алтаре погасли. Здесь больше ничего не произойдёт.', 'info'); return false; }
   if (t === T.DRY) { msg(g, 'Фонтан высох. Только мох и пара монеток на дне... нет, показалось.', 'info'); return false; }
   if (t === T.BARS) {
     msg(g, 'Прочная решётка. Сквозь неё виден Барсик.', 'info');
@@ -754,6 +773,48 @@ function drinkFountain(g, x, y) {
   }
   chron(g, 'Выпил из фонтана');
   achieve(g, 'fountain');
+  return endTurn(g);
+}
+
+function altarCost(g) { return 20 + g.depth * 12; }
+
+function prayAltar(g, x, y) {
+  const p = g.player, rng = g.rng;
+  const cost = altarCost(g);
+  if (p.gold < cost) {
+    msg(g, `На алтаре надпись: «Оставь ${cost} ${plural(cost, 'монету', 'монеты', 'монет')} и получишь благословение». У вас ${p.gold}.`, 'info');
+    return false;
+  }
+  p.gold -= cost;
+  g.level.tiles[idx(x, y)] = T.ALTAR_OFF;
+  fx(g, { type: 'sound', name: 'levelup' });
+  fx(g, { type: 'particles', x: p.x, y: p.y, color: '#fff3b0', n: 22 });
+  const opts = [['vigor', 3]];
+  if (p.weapon) opts.push(['weapon', 3]);
+  if (p.armor) opts.push(['armor', 3]);
+  if (p.inv.some((o) => !isKnown(g, o))) opts.push(['wisdom', 2]);
+  const b = rng.weighted(opts);
+  msg(g, `Вы оставляете ${cost} ${plural(cost, 'монету', 'монеты', 'монет')} на алтаре. Свечи вспыхивают и гаснут.`, 'info');
+  switch (b) {
+    case 'vigor':
+      p.maxHp += 4; p.hp = p.maxHp;
+      msg(g, 'Благословение здоровья: раны исчезли, а сил прибавилось. (+4 к здоровью)', 'good');
+      break;
+    case 'weapon':
+      p.weapon.ench++;
+      msg(g, `Благословение оружия: ${itemName(g, p.weapon)}.`, 'good');
+      break;
+    case 'armor':
+      p.armor.ench++;
+      msg(g, `Благословение брони: ${itemName(g, p.armor)}.`, 'good');
+      break;
+    case 'wisdom':
+      for (const o of p.inv) if (g.known[o.kind]) g.known[o.kind][o.type] = true;
+      msg(g, 'Благословение мудрости: вы понимаете, что лежит у вас в рюкзаке.', 'good');
+      break;
+  }
+  achieve(g, 'blessed');
+  chron(g, 'Получил благословение на алтаре');
   return endTurn(g);
 }
 

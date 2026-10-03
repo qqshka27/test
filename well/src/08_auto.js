@@ -55,6 +55,7 @@ function exploreGoals(g) {
     if (tr && !tr.hidden) continue;
     goals.push({ x: it.x, y: it.y });
   }
+  // Алтари стоит хотя бы показать — к ним путь не ведём, это решение игрока
   // Замаскированные мимики выглядят как сундуки — исследователь к ним тоже идёт
   for (const a of g.actors) if (a.disguised && lv.seen[idx(a.x, a.y)]) goals.push({ x: a.x, y: a.y });
   return goals;
