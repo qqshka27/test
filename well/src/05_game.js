@@ -73,6 +73,8 @@ function tip(g, key, text) {
 }
 
 function msg(g, text, cls = 'info') {
+  const last = g.messages[g.messages.length - 1];
+  if (last && last.text === text) { last.count = (last.count || 1) + 1; last.turn = g.turn; return; }
   g.messages.push({ text, cls, turn: g.turn });
   if (g.messages.length > 120) g.messages.splice(0, g.messages.length - 120);
 }

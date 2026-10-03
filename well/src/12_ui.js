@@ -153,7 +153,7 @@ function startAuto(kind, target, descendAtEnd) {
   if (!G || G.over) return;
   audioInit();
   const seen = new Set(visibleEnemies(G).map((m) => m.id));
-  if (kind === 'explore' && seen.size) { msg(G, 'Рядом враг — сначала разберитесь с ним.', 'hint'); renderLog(); return; }
+  if (kind === 'explore' && visibleEnemies(G).some((m) => m.awake || dist(m, G.player) <= 2)) { msg(G, 'Рядом враг — сначала разберитесь с ним.', 'hint'); renderLog(); return; }
   UI.auto = { kind, target, descendAtEnd, hp: G.player.hp, seen, msgLen: G.messages.length, steps: 0 };
   UI.auto.timer = setInterval(autoTick, 55);
   renderHUD();
@@ -320,7 +320,7 @@ function renderLog() {
   const lastTurn = G.messages.length ? G.messages[G.messages.length - 1].turn : 0;
   box.innerHTML = last.map((m) => {
     const fresh = m.turn >= lastTurn - 0;
-    return `<p class="${esc(m.cls)} ${fresh ? 'new' : 'old'}">${esc(m.text)}</p>`;
+    return `<p class="${esc(m.cls)} ${fresh ? 'new' : 'old'}">${esc(m.text)}${m.count > 1 ? ` <span style="opacity:.6">×${m.count}</span>` : ''}</p>`;
   }).join('');
   UI.lastLog = newest;
 }
@@ -565,7 +565,7 @@ function showEnd() {
 }
 
 function showHistory() {
-  const items = G.messages.slice(-80).map((m) => `<p class="${esc(m.cls)}" style="margin:0 0 3px">${esc(m.text)}</p>`).join('');
+  const items = G.messages.slice(-80).map((m) => `<p class="${esc(m.cls)}" style="margin:0 0 3px">${esc(m.text)}${m.count > 1 ? ` ×${m.count}` : ''}</p>`).join('');
   openModal(`<div class="sheet" role="dialog" aria-label="Журнал">
     <header><h2>Журнал</h2><button class="close" aria-label="Закрыть">×</button></header>
     <div class="body log-full">${items}</div></div>`, (m) => {

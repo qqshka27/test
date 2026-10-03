@@ -1,0 +1,27 @@
+name: Кот в колодце
+
+on:
+  push:
+    paths: ['well/**', '.github/workflows/well.yml']
+  pull_request:
+    paths: ['well/**', '.github/workflows/well.yml']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: well
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Сборка
+        run: python3 tools/build.py
+      - name: Собранный файл совпадает с исходниками
+        run: git diff --exit-code -- dist/
+      - name: Тесты движка
+        run: node --test tests/engine.test.mjs
+      - name: Бот играет 15 партий
+        run: node tests/bot.mjs 15 1

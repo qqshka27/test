@@ -76,8 +76,9 @@ function exploreGoals(g) {
 // Один шаг автоисследования. Возвращает 'moved' | 'danger' | 'done' | 'stuck'
 function exploreStep(g) {
   if (g.over) return 'stuck';
-  if (visibleEnemies(g).length) return 'danger';
   const p = g.player;
+  // Спящие враги вдалеке разведке не мешают
+  if (visibleEnemies(g).some((m) => m.awake || dist(m, p) <= 2)) return 'danger';
   const goals = exploreGoals(g);
   if (!goals.length) return 'done';
   const cost = travelCost(g);

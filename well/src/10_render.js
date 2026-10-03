@@ -99,9 +99,16 @@ function drawTilePixels(ctx, lv, th, x, y) {
         px(ctx, th.wallLo, X + ((5 + off) % 8), Y + 4, 1, 3);
         if (hash2(x, y, 7) < 0.25) px(ctx, th.wallHi, X + 2 + Math.floor(hash2(x, y, 8) * 4), Y + 5, 2, 1);
       } else {
-        // Верх стены
+        // Верх стены: тёмная кладка с кромкой там, где рядом пол
         px(ctx, th.wallLo, X, Y, 8, 8);
+        px(ctx, shade(th.wallLo, 0.82), X + ((y % 2) * 4), Y + 3, 1, 4);
+        px(ctx, shade(th.wallLo, 0.82), X, Y + 3, 8, 1);
         if (hash2(x, y, 5) < 0.3) px(ctx, shade(th.wallLo, 1.15), X + Math.floor(hash2(x, y, 6) * 6), Y + Math.floor(hash2(x, y, 9) * 6), 2, 2);
+        const open = (nx, ny) => inBounds(nx, ny) && lv.tiles[idx(nx, ny)] !== T.WALL;
+        const rim = shade(th.wallHi, 0.85);
+        if (open(x - 1, y)) px(ctx, rim, X, Y, 1, 8);
+        if (open(x + 1, y)) px(ctx, rim, X + 7, Y, 1, 8);
+        if (open(x, y - 1)) px(ctx, th.wallHi, X, Y, 8, 1);
       }
       break;
     }
