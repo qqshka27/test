@@ -89,7 +89,7 @@ function itemDesc(g, it) {
   switch (it.kind) {
     case 'weapon': {
       const w = WEAPONS[it.type];
-      return `Урон ${w.dmg[0] + it.ench}–${w.dmg[1] + it.ench}, меткость ${w.accu + it.ench >= 0 ? '+' : ''}${w.accu + it.ench}.`;
+      return `Урон ${w.dmg[0] + it.ench}–${w.dmg[1] + it.ench}, меткость ${w.accu + it.ench >= 0 ? '+' : ''}${w.accu + it.ench}.${w.sweep ? ' Бьёт всех врагов вокруг.' : ''}`;
     }
     case 'armor': {
       const a = ARMORS[it.type];
@@ -98,7 +98,8 @@ function itemDesc(g, it) {
     case 'potion': return isKnown(g, it) ? potionDesc(it.type) : 'Неизвестное зелье. Выпейте, чтобы узнать. Или бросьте во врага.';
     case 'scroll': return isKnown(g, it) ? scrollDesc(it.type) : 'Неизвестный свиток. Прочтите, чтобы узнать.';
     case 'wand': return isKnown(g, it) ? wandDesc(it.type) + ` Зарядов: ${it.charges}.` : 'Неизвестная палочка. Взмахните ею, чтобы узнать.';
-    case 'food': return it.type === 'sausage'
+    case 'food': if (g.hero === 'granny' && it.type === 'pie') return `Восстанавливает ${FOODS.pie.heal * 2} здоровья. Свои, домашние.`;
+      return it.type === 'sausage'
       ? `Восстанавливает ${FOODS[it.type].heal} здоровья. Собаки от неё без ума.`
       : `Восстанавливает ${FOODS[it.type].heal} здоровья. Бабушкин рецепт.`;
     case 'knife': return 'Бросьте во врага: урон 2–6.';

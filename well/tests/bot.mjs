@@ -101,12 +101,13 @@ function botTurn(g) {
   return E.playerWait(g);
 }
 
-export function playOne(seed, maxTurns = 10000) {
-  const g = E.newGame(seed);
+export function playOne(seed, maxTurns = 10000, hero) {
+  const g = E.newGame(seed, hero);
   let actions = 0, stuck = 0;
   while (!g.over && actions < maxTurns) {
     const before = g.turn;
     botTurn(g);
+    g.fx.length = 0; // в Node эффекты некому показывать
     actions++;
     if (g.turn === before) { if (++stuck > 50) E.playerWait(g); } else stuck = 0;
   }
@@ -116,11 +117,12 @@ export function playOne(seed, maxTurns = 10000) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const n = Number(process.argv[2] || 50);
   const seed0 = Number(process.argv[3] || 1);
+  const hero = process.argv[4];
   const depths = {}, causes = {};
   let wins = 0, turns = 0, levels = 0;
   const t0 = Date.now();
   for (let i = 0; i < n; i++) {
-    const g = playOne(seed0 + i);
+    const g = playOne(seed0 + i, 10000, hero);
     const key = g.over ? (g.over.won ? 'win' : g.depth) : `timeout@${g.depth}`;
     depths[key] = (depths[key] || 0) + 1;
     if (g.over && !g.over.won) causes[g.over.cause] = (causes[g.over.cause] || 0) + 1;

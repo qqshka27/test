@@ -68,7 +68,7 @@ function useItem(g, it, chosen) {
     removeOne(g, it);
     const f = FOODS[it.type];
     const before = p.hp;
-    p.hp = Math.min(p.maxHp, p.hp + f.heal);
+    p.hp = Math.min(p.maxHp, p.hp + (g.hero === 'granny' && it.type === 'pie' ? f.heal * 2 : f.heal));
     msg(g, it.type === 'pie' ? `Вы съедаете пирожок. Как у бабушки! (+${p.hp - before})` : `Вы съедаете сосиску. Вкусно, хоть и холодная. (+${p.hp - before})`, 'good');
     fx(g, { type: 'float', x: p.x, y: p.y, text: `+${p.hp - before}`, color: '#7cd36a' });
     fx(g, { type: 'sound', name: 'eat' });
@@ -290,6 +290,7 @@ function throwItem(g, it, tx, ty) {
         msg(g, 'Щенок хватает сосиску и радостно убегает. Минус один.', 'good');
       } else {
         hitMonster.status.distracted = 5;
+        achieve(g, 'sausage');
         msg(g, 'Древний Пёс забывает обо всём и жуёт сосиску!', 'good');
       }
       fx(g, { type: 'particles', x: lx, y: ly, color: '#e07a5f', n: 10 });
@@ -362,6 +363,7 @@ function zapWand(g, it, tx, ty) {
       }
       fx(g, { type: 'bolt', pts, color: '#d9a066', thin: true });
       fx(g, { type: 'shake', power: 3 });
+      if (dug) achieve(g, 'mole');
       msg(g, dug ? 'Камень рассыпается в пыль, открывая проход.' : 'Луч копания ничего не задевает.', wasKnown ? 'info' : 'ident');
       if (!wasKnown) msg(g, 'Это палочка копания.', 'ident');
       break;

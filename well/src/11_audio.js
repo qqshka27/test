@@ -44,6 +44,26 @@ function noise(dur, vol = 0.4, freq = 1200, delay = 0) {
   src.start(t);
 }
 
+// Фон: редкие капли, шорохи, далёкий лай в логове
+let _ambientNext = 0;
+function ambientTick(theme, now) {
+  if (!AUDIO.on || !AUDIO.ctx || AUDIO.ctx.state !== 'running') return;
+  if (now < _ambientNext) return;
+  _ambientNext = now + 5000 + Math.random() * 9000;
+  try {
+    const r = Math.random();
+    if (theme === 'lair' && r < 0.35) {
+      tone(140, 0.12, 'sawtooth', 0.05, -60); tone(140, 0.12, 'sawtooth', 0.04, -60, 0.2); // далёкое «гав-гав»
+    } else if (theme === 'caves' && r < 0.4) {
+      noise(0.6, 0.04, 500); // шорох
+    } else {
+      const f = 1400 + Math.random() * 900; // капля
+      tone(f, 0.12, 'sine', 0.07, -f * 0.5);
+      if (Math.random() < 0.5) tone(f * 0.8, 0.1, 'sine', 0.04, -f * 0.4, 0.35 + Math.random() * 0.3);
+    }
+  } catch (e) { /* не страшно */ }
+}
+
 function playSound(name) {
   if (!AUDIO.on || !AUDIO.ctx) return;
   // Не долбим один и тот же звук чаще 40 мс

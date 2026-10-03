@@ -1,6 +1,6 @@
 // ===== Игра: состояние, ходы, бой =====
 
-function newGame(seed) {
+function newGame(seed, heroId = 'vasya') {
   seed = (seed === undefined ? (Math.random() * 2 ** 32) >>> 0 : seed >>> 0);
   ITEM_ID = 1;
   const g = {
@@ -21,22 +21,41 @@ function newGame(seed) {
     level: null,
   };
   setupAppearances(g);
+  if (!HEROES[heroId]) heroId = 'vasya';
+  const hero = HEROES[heroId];
+  g.hero = heroId;
   g.player = {
-    id: 0, type: 'player', x: 0, y: 0, hp: 24, maxHp: 24, energy: 100, speed: 100,
+    id: 0, type: 'player', x: 0, y: 0, hp: hero.hp, maxHp: hero.hp, energy: 100, speed: 100,
     level: 1, xp: 0, str: 0, gold: 0, inv: [], weapon: null, armor: null, status: {},
     regenClock: 0,
   };
-  const dagger = makeItem('weapon', 'dagger');
-  const jacket = makeItem('armor', 'leather');
-  g.player.inv.push(dagger, jacket, makeItem('food', 'pie'), makeItem('potion', 'heal'));
-  g.player.weapon = dagger;
-  g.player.armor = jacket;
+  const p = g.player;
+  const kit = {
+    vasya: [['weapon', 'dagger'], ['armor', 'leather'], ['food', 'pie'], ['potion', 'heal']],
+    granny: [['weapon', 'rollingpin'], ['armor', 'shawl'], ['food', 'pie', 3], ['food', 'sausage', 1], ['potion', 'heal']],
+    janitor: [['weapon', 'broom'], ['armor', 'quilted'], ['knife', 'knife', 6], ['food', 'pie']],
+  }[heroId];
+  for (const [kind, type, qty] of kit) {
+    const it = makeItem(kind, type, qty ? { qty } : {});
+    p.inv.push(it);
+    if (kind === 'weapon') p.weapon = it;
+    if (kind === 'armor') p.armor = it;
+  }
   g.known.potion.heal = true; // бабушка дала с собой, подписала
+  if (heroId === 'janitor') g.known.scroll.mapping = true; // дворник знает все ходы
   g.tips = {};
-  msg(g, 'Барсик опять провалился в старый колодец. Придётся лезть за ним.', 'story');
+  msg(g, 'Барсик опять провалился в старый колодец.', 'story');
+  msg(g, hero.intro, 'story');
   enterLevel(g, 1);
   msg(g, 'Ходите стрелками или тапом по клетке. «Разведка» исследует уровень сама.', 'hint');
   return g;
+}
+
+function achieve(g, id) {
+  if (!g.achieved) g.achieved = {};
+  if (g.achieved[id]) return;
+  g.achieved[id] = 1;
+  fx(g, { type: 'ach', id });
 }
 
 // Летопись забега: важные события для финального экрана
@@ -64,6 +83,7 @@ function fx(g, e) { g.fx.push(e); }
 function enterLevel(g, depth) {
   g.depth = depth;
   g.stats.deepest = Math.max(g.stats.deepest, depth);
+  if (depth >= 5) achieve(g, 'depth5');
   const lv = generateLevel(depth, g.rng);
   lv.seen = new Uint8Array(MAP_W * MAP_H);
   lv.visible = new Uint8Array(MAP_W * MAP_H);
@@ -425,6 +445,9 @@ function killMonster(g, m, source) {
     if (!g.slain) g.slain = {};
     if (!g.slain[m.type] && ['ogre', 'necro', 'shade', 'mimic', 'ghost'].includes(m.type)) chron(g, `Первая победа: ${def.name}`);
     g.slain[m.type] = (g.slain[m.type] || 0) + 1;
+    achieve(g, 'first_blood');
+    if (m.type === 'mimic') achieve(g, 'mimic');
+    if (m.type === 'necro') achieve(g, 'necro');
     gainXP(g, def.xp + Math.floor(def.xp * Math.max(0, g.depth - def.depth[0]) * 0.1));
   }
   // Миньоны некроманта рассыпаются вместе с ним
@@ -457,6 +480,7 @@ function defeatBoss(g, dog) {
 
 function gainXP(g, n) {
   const p = g.player;
+  if (g.hero === 'vasya') n = Math.round(n * 1.25);
   p.xp += n;
   while (p.xp >= xpToNext(p.level)) {
     p.xp -= xpToNext(p.level);
@@ -474,6 +498,7 @@ function levelUp(g) {
   if (p.level % 2 === 1) { p.str++; extra = ', сила +1'; }
   msg(g, `Новый уровень: ${p.level}! Здоровье +${hp}${extra}.`, 'good');
   if (p.level % 3 === 0) chron(g, `Достиг ${p.level} уровня`);
+  if (p.level >= 8) achieve(g, 'veteran');
   fx(g, { type: 'levelup', x: p.x, y: p.y });
   fx(g, { type: 'sound', name: 'levelup' });
 }
@@ -484,6 +509,10 @@ function gameOver(g, won, cause) {
   g.stats.killedBy = cause;
   chron(g, won ? 'Спас Барсика' : `Пал в бою. Причина: ${cause}`);
   if (won) {
+    achieve(g, 'rescue');
+    if (g.hero === 'granny') achieve(g, 'granny_win');
+    if (g.hero === 'janitor') achieve(g, 'janitor_win');
+    if (g.turn < 2500) achieve(g, 'fast');
     msg(g, 'Барсик трётся о ваши ноги и громко мурчит. Пора домой!', 'boss');
   } else {
     msg(g, `Вы погибли. Причина: ${cause}.`, 'bad');
@@ -550,6 +579,7 @@ function pickUp(g, buy) {
   if (!it || it.kind === 'chest') return false;
   if (it.kind === 'gold') {
     p.gold += it.qty; g.stats.goldFound += it.qty;
+    if (p.gold >= 500) achieve(g, 'rich');
     g.items = g.items.filter((o) => o !== it);
     msg(g, `Вы подбираете ${itemName(g, it)}.`, 'loot');
     fx(g, { type: 'sound', name: 'coin' });
@@ -577,6 +607,8 @@ function pickUp(g, buy) {
     addToInventory(g, it);
     msg(g, `Куплено: ${itemName(g, it)} за ${price}. «Приходите ещё!»`, 'shop');
     chron(g, `Купил: ${itemName(g, it)}`);
+    g.stats.bought = (g.stats.bought || 0) + 1;
+    if (g.stats.bought >= 3) achieve(g, 'shopper');
     fx(g, { type: 'sound', name: 'coin' });
     return true;
   }
@@ -638,6 +670,14 @@ function playerMove(g, dx, dy) {
     }
     if (target.disguised) revealMimic(g, target);
     attack(g, p, target);
+    // Метла задевает всех врагов вокруг
+    if (p.weapon && WEAPONS[p.weapon.type].sweep) {
+      for (const a of g.actors.slice()) {
+        if (a === target || MONSTERS[a.type].peaceful || a.disguised || dist(a, p) !== 1 || !g.actors.includes(a)) continue;
+        if (g.over) break;
+        attack(g, p, a);
+      }
+    }
     return endTurn(g);
   }
   const t = g.level.tiles[idx(nx, ny)];
@@ -713,6 +753,7 @@ function drinkFountain(g, x, y) {
       break;
   }
   chron(g, 'Выпил из фонтана');
+  achieve(g, 'fountain');
   return endTurn(g);
 }
 
@@ -845,7 +886,7 @@ function worldTick(g) {
   tickStatus(g, p);
   // Естественное восстановление
   p.regenClock++;
-  const every = Math.max(6, 18 - p.level);
+  const every = Math.max(g.hero === 'granny' ? 4 : 6, (g.hero === 'granny' ? 13 : 18) - p.level);
   if (p.regenClock >= every) {
     p.regenClock = 0;
     if (p.hp < p.maxHp && !p.status.poison) p.hp++;

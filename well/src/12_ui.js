@@ -1,10 +1,40 @@
 // ===== Интерфейс: HUD, окна, управление =====
 
 let G = null;
-const UI = { auto: null, targeting: null, modal: null, endTimer: null, saveTurn: 0, longPress: null, lastLog: null };
+const UI = { hero: 'vasya', auto: null, targeting: null, modal: null, endTimer: null, saveTurn: 0, longPress: null, lastLog: null };
 const SAVE_KEY = 'well-save-v1';
 const REC_KEY = 'well-records-v1';
 const SET_KEY = 'well-settings-v1';
+const ACH_KEY = 'well-achievements-v1';
+
+function loadAch() { try { return JSON.parse(load(ACH_KEY) || '{}'); } catch (e) { return {}; } }
+
+function onAchievement(id) {
+  if (!G || G._demo || !ACHIEVEMENTS[id]) return;
+  const got = loadAch();
+  if (got[id]) return;
+  got[id] = Date.now();
+  store(ACH_KEY, JSON.stringify(got));
+  toast(`Достижение: ${ACHIEVEMENTS[id][0]}`, ACHIEVEMENTS[id][1]);
+  playSound('chest');
+}
+
+function toast(title, text) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<b>${esc(title)}</b><span>${esc(text)}</span>`;
+  $('stage').appendChild(el);
+  setTimeout(() => el.classList.add('out'), 3200);
+  setTimeout(() => el.remove(), 3800);
+}
+
+function showAchievements() {
+  const got = loadAch();
+  const n = Object.keys(ACHIEVEMENTS).filter((k) => got[k]).length;
+  openModal(`<div class="sheet" role="dialog" aria-label="Достижения">
+    <header><h2>Достижения</h2><span style="color:var(--dim);font:13px var(--font-display)">${n}/${Object.keys(ACHIEVEMENTS).length}</span><button class="close" aria-label="Закрыть">×</button></header>
+    <div class="body"><ul class="ach">${Object.entries(ACHIEVEMENTS).map(([k, [t, d]]) => `<li class="${got[k] ? 'got' : ''}"><b>${esc(t)}</b><span>${esc(d)}</span></li>`).join('')}</ul></div></div>`);
+}
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -18,6 +48,7 @@ function boot(hot) {
   initRenderer($('view'), $('mini'));
   const settings = JSON.parse(load(SET_KEY) || '{}');
   AUDIO.on = settings.sound !== false;
+  if (HEROES[settings.hero]) UI.hero = settings.hero;
   if (settings.mini === false) $('mini').hidden = true;
   syncSoundBtn();
   bindInput();
@@ -41,7 +72,11 @@ function boot(hot) {
   const frame = (t) => {
     const dt = Math.min(0.1, Math.max(0, (t - last) / 1000));
     last = t;
-    if (G) { consumeFx(G); renderFrame(G, dt); }
+    if (G) {
+      consumeFx(G);
+      renderFrame(G, dt);
+      if ($('title').hidden && !G.over) ambientTick(G.level.theme, t);
+    }
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
@@ -51,7 +86,7 @@ function startNewGame(seed) {
   stopAuto();
   cancelTargeting();
   clearTimeout(UI.endTimer);
-  G = newGame(seed);
+  G = newGame(seed, UI.hero);
   UI.lastLog = null;
   R.mapKey = '';
   hideTitle();
@@ -546,7 +581,7 @@ function chronicleHTML() {
 function addRecord() {
   const recs = JSON.parse(load(REC_KEY) || '[]');
   const o = G.over;
-  recs.push({ score: o.score, won: o.won, depth: G.stats.deepest, cause: o.cause, level: G.player.level, seed: G.seed, date: Date.now() });
+  recs.push({ hero: G.hero, score: o.score, won: o.won, depth: G.stats.deepest, cause: o.cause, level: G.player.level, seed: G.seed, date: Date.now() });
   recs.sort((a, b) => b.score - a.score);
   store(REC_KEY, JSON.stringify(recs.slice(0, 8)));
 }
@@ -562,14 +597,20 @@ function showTitle() {
     <canvas id="t-cat" width="40" height="40" aria-hidden="true"></canvas>
     <h1>Кот в колодце</h1>
     <p class="sub">Барсик опять провалился в старый колодец. Внизу десять глубин: подвал, катакомбы, пещеры и логово Древнего Пса. Пошаговый рогалик: каждый спуск новый.</p>
+    <div class="heroes" role="radiogroup" aria-label="Герой">
+      ${Object.entries(HEROES).map(([id, h]) => `<button role="radio" aria-checked="${UI.hero === id}" data-hero="${id}">
+        <img src="${spriteURL(h.sprite)}" alt="" width="40" height="40"><b>${esc(h.name)}</b><small>${esc(h.about)}</small></button>`).join('')}
+    </div>
+    <p class="hero-about" id="t-about">${esc(HEROES[UI.hero].about)}</p>
     <div class="menu">
       ${save ? '<button class="btn" id="t-cont">Продолжить забег</button>' : ''}
       <button class="btn ${save ? 'ghost' : ''}" id="t-new">Новая игра</button>
       <button class="btn ghost" id="t-daily">Забег дня · ${esc(todayLabel())}</button>
       <button class="btn ghost" id="t-help">Как играть</button>
+      <button class="btn ghost" id="t-ach">Достижения · ${Object.keys(loadAch()).filter((k) => ACHIEVEMENTS[k]).length}/${Object.keys(ACHIEVEMENTS).length}</button>
     </div>
     <div class="seed"><label for="t-seed">Сид (необязательно):</label><input id="t-seed" inputmode="numeric" placeholder="случайный"></div>
-    ${recs.length ? `<div class="records"><h3>Лучшие забеги</h3><ol>${recs.map((r) => `<li><b>${r.score}</b><span>${r.won ? 'Барсик спасён' : `глубина ${r.depth}, ${esc(r.cause || '')}`}</span><span style="flex:none">ур ${r.level}</span></li>`).join('')}</ol></div>` : ''}`;
+    ${recs.length ? `<div class="records"><h3>Лучшие забеги</h3><ol>${recs.map((r) => `<li><b>${r.score}</b><span>${r.won ? 'Барсик спасён' : `глубина ${r.depth}, ${esc(r.cause || '')}`}</span><span style="flex:none">${esc((HEROES[r.hero] || HEROES.vasya).name)}, ур ${r.level}</span></li>`).join('')}</ol></div>` : ''}`;
   t.hidden = false;
   if ($('t-cont')) $('t-cont').onclick = () => {
     try { G = deserializeGame(save); R.mapKey = ''; R.anim.clear(); R.cam.init = false; hideTitle(); afterAction(true); }
@@ -581,6 +622,16 @@ function showTitle() {
     startNewGame(v && /^\d+$/.test(v) ? Number(v) : undefined);
   };
   $('t-help').onclick = () => showHelp();
+  $('t-ach').onclick = () => showAchievements();
+  t.querySelectorAll('[data-hero]').forEach((b) => {
+    b.onclick = () => {
+      UI.hero = b.dataset.hero;
+      saveSettings();
+      playSound('click');
+      t.querySelectorAll('[data-hero]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+      $('t-about').textContent = HEROES[UI.hero].about;
+    };
+  });
   $('t-daily').onclick = () => { audioInit(); startNewGame(dailySeed()); };
   animateTitleCat();
 }
@@ -693,7 +744,7 @@ function toggleMini() {
   saveSettings();
 }
 
-function saveSettings() { store(SET_KEY, JSON.stringify({ sound: AUDIO.on, mini: !$('mini').hidden })); }
+function saveSettings() { store(SET_KEY, JSON.stringify({ sound: AUDIO.on, mini: !$('mini').hidden, hero: UI.hero })); }
 function syncSoundBtn() { $('btn-sound').setAttribute('aria-pressed', String(AUDIO.on)); }
 
 function onTapTile(tx, ty) {

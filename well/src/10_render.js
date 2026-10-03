@@ -193,6 +193,7 @@ function consumeFx(g) {
       case 'levelin': R.fadeIn = 1; R.anim.clear(); R.cam.init = false; R.floats = []; R.particles = []; R.deaths = []; break;
       case 'boss': R.bossPulse = 1; break;
       case 'sound': playSound(e.name); break;
+      case 'ach': if (typeof onAchievement === 'function') onAchievement(e.id); break;
     }
   }
   g.fx.length = 0;
@@ -397,7 +398,7 @@ function renderFrame(g, dt) {
     ctx.ellipse(dx + ts / 2, dy + ts * 0.9, ts * 0.3, ts * 0.09, 0, 0, Math.PI * 2);
     ctx.fill();
     if (g.over && !g.over.won) ctx.globalAlpha = 0.4;
-    drawSprite(ctx, 'player', dx + ts * 0.06, dy + ts * 0.04, ts * 0.88, 1, null, an.flash > 0.5 ? '#ff6b5e' : null);
+    drawSprite(ctx, (HEROES[g.hero] || HEROES.vasya).sprite, dx + ts * 0.06, dy + ts * 0.04, ts * 0.88, 1, null, an.flash > 0.5 ? '#ff6b5e' : null);
     ctx.globalAlpha = 1;
     if (p.status.haste) { ctx.fillStyle = 'rgba(159,226,255,0.5)'; ctx.fillRect(dx - ts * 0.12, dy + ts * 0.4, ts * 0.12, 2); ctx.fillRect(dx - ts * 0.2, dy + ts * 0.6, ts * 0.16, 2); }
   }

@@ -166,6 +166,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lantern); o
 .title canvas { width: 160px; height: 160px; image-rendering: pixelated; }
 .title h1 { font: 700 clamp(40px, 11vw, 76px)/1 var(--font-display); margin: 8px 0 6px; color: var(--lantern); letter-spacing: .01em; text-shadow: 0 4px 0 #6b3a1a, 0 0 40px #ffb34740; text-wrap: balance; }
 .title .sub { max-width: 34em; color: var(--dim); margin: 0 0 22px; }
+.heroes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: min(560px, 100%); margin: 0 0 16px; }
+.heroes button {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px; min-width: 0;
+  background: #17131ccc; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; text-align: center;
+}
+.heroes button[aria-checked="true"] { border-color: var(--lantern); background: #2a1f1acc; box-shadow: 0 0 0 1px var(--lantern) inset; }
+.heroes img { image-rendering: pixelated; width: 40px; height: 40px; }
+.heroes b { font: 16px var(--font-display); color: var(--ink); }
+.heroes button[aria-checked="true"] b { color: var(--lantern); }
+.heroes small { font-size: 12px; line-height: 1.3; color: var(--dim); }
+.hero-about { display: none; margin: -6px 0 14px; color: var(--dim); font-size: 13px; max-width: 30em; }
+@media (max-width: 420px) { .heroes small { display: none; } .hero-about { display: block; } .title .sub { margin-bottom: 14px; } }
 .title .menu { display: flex; flex-direction: column; gap: 8px; width: min(300px, 100%); }
 .title .menu .btn { padding: 12px; font-size: 17px; }
 .title .seed { display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 14px; color: var(--dim); font-size: 13px; flex-wrap: wrap; }
@@ -192,6 +204,23 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lantern); o
 .chron { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 4px; }
 .chron li { display: flex; gap: 10px; font-size: 14px; }
 .chron li span { font: 13px var(--font-display); color: var(--lantern); min-width: 3.4em; font-variant-numeric: tabular-nums; }
+.toast {
+  position: absolute; top: 44px; left: 50%; transform: translateX(-50%); z-index: 5; max-width: calc(100% - 32px);
+  background: #1d1622f0; border: 1px solid var(--gold); border-radius: 8px; padding: 8px 14px;
+  display: flex; flex-direction: column; align-items: center; text-align: center; box-shadow: 0 8px 30px #000a;
+  animation: toast-in .35s ease-out; transition: opacity .5s, transform .5s; pointer-events: none;
+}
+.toast b { font: 15px var(--font-display); color: var(--gold); }
+.toast span { font-size: 13px; color: var(--dim); }
+.toast.out { opacity: 0; transform: translate(-50%, -10px); }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, -14px); } }
+.ach { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.ach li { display: flex; flex-direction: column; padding: 8px 12px; border-radius: 8px; background: var(--panel-2); opacity: .5; border: 1px solid transparent; }
+.ach li.got { opacity: 1; border-color: #ffd34e55; }
+.ach li b { font: 15px var(--font-display); }
+.ach li.got b { color: var(--gold); }
+.ach li span { font-size: 13px; color: var(--dim); }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .bar i, .xpbar i { transition: none; } }
 </style>
 
@@ -443,6 +472,9 @@ const WEAPONS = {
   mace:    { name: 'булава', sprite: 'mace', dmg: [5, 9], accu: 0, depth: 5, price: 100 },
   longsword: { name: 'длинный меч', sprite: 'longsword', dmg: [6, 11], accu: 1, depth: 6, price: 140 },
   hammer:  { name: 'боевой молот', sprite: 'hammer', dmg: [7, 14], accu: -2, depth: 8, price: 180 },
+  // Стартовое оружие героев, в подземелье не встречается
+  rollingpin: { name: 'скалка', sprite: 'rollingpin', dmg: [2, 5], accu: 1, depth: 99, price: 15 },
+  broom:   { name: 'метла', sprite: 'broom', dmg: [1, 4], accu: 2, depth: 99, price: 15, sweep: true },
 };
 
 const ARMORS = {
@@ -451,6 +483,27 @@ const ARMORS = {
   chain:   { name: 'кольчуга', sprite: 'chain', arm: 3, eva: -1, depth: 4, price: 80 },
   scale:   { name: 'чешуйчатый доспех', sprite: 'scale', arm: 4, eva: -1, depth: 6, price: 120 },
   plate:   { name: 'латы', sprite: 'plate', arm: 6, eva: -3, depth: 8, price: 170 },
+  shawl:   { name: 'пуховый платок', sprite: 'shawl', arm: 1, eva: 1, depth: 99, price: 20 },
+  quilted: { name: 'телогрейка', sprite: 'quilted', arm: 2, eva: 0, depth: 99, price: 30 },
+};
+
+// Герои на выбор
+const HEROES = {
+  vasya: {
+    name: 'Вася', sprite: 'player', hp: 24,
+    about: 'Внук. Кинжал и кожаная куртка. Молодой, учится на четверть быстрее.',
+    intro: 'Бабушка послала Васю за Барсиком. Опять.',
+  },
+  granny: {
+    name: 'Бабушка', sprite: 'granny', hp: 20,
+    about: 'Скалка и платок. Пирожки лечат вдвое лучше, раны заживают быстрее.',
+    intro: 'Барсик — мой кот. Мне за ним и лезть, — сказала бабушка и взяла скалку.',
+  },
+  janitor: {
+    name: 'Дворник', sprite: 'janitor', hp: 28,
+    about: 'Метла бьёт всех врагов вокруг. Телогрейка и связка ножей.',
+    intro: 'Кто ж ещё полезет в колодец, кроме дворника, — вздохнул Михалыч.',
+  },
 };
 
 // Зелья и свитки выглядят по-разному в каждой игре, пока их не опознаешь
@@ -521,6 +574,24 @@ function themeFor(depth) {
   if (depth >= 4) return 'crypt';
   return 'cellar';
 }
+
+// Достижения (хранятся между играми в браузере)
+const ACHIEVEMENTS = {
+  first_blood: ['Первая кровь', 'Победить первого врага.'],
+  depth5:      ['На полпути', 'Спуститься на пятую глубину.'],
+  rescue:      ['Барсик дома', 'Спасти Барсика.'],
+  granny_win:  ['Бабушкина скалка', 'Спасти Барсика, играя за бабушку.'],
+  janitor_win: ['Чисто вымел', 'Спасти Барсика, играя за дворника.'],
+  fast:        ['Быстрые лапы', 'Спасти Барсика меньше чем за 2500 ходов.'],
+  sausage:     ['Хороший мальчик', 'Отвлечь Древнего Пса сосиской.'],
+  mimic:       ['Не всё то сундук', 'Победить мимика.'],
+  necro:       ['Покойся с миром', 'Победить некроманта.'],
+  fountain:    ['Водохлёб', 'Выпить из фонтана.'],
+  shopper:     ['Постоянный клиент', 'Купить три вещи за один забег.'],
+  rich:        ['Богач', 'Накопить 500 монет.'],
+  veteran:     ['Ветеран', 'Достичь 8 уровня.'],
+  mole:        ['Крот', 'Прорыть стену палочкой копания.'],
+};
 
 // Фразы на входе в уровень: следы Барсика
 const CAT_HINTS = [
@@ -968,7 +1039,7 @@ function itemDesc(g, it) {
   switch (it.kind) {
     case 'weapon': {
       const w = WEAPONS[it.type];
-      return `Урон ${w.dmg[0] + it.ench}–${w.dmg[1] + it.ench}, меткость ${w.accu + it.ench >= 0 ? '+' : ''}${w.accu + it.ench}.`;
+      return `Урон ${w.dmg[0] + it.ench}–${w.dmg[1] + it.ench}, меткость ${w.accu + it.ench >= 0 ? '+' : ''}${w.accu + it.ench}.${w.sweep ? ' Бьёт всех врагов вокруг.' : ''}`;
     }
     case 'armor': {
       const a = ARMORS[it.type];
@@ -977,7 +1048,8 @@ function itemDesc(g, it) {
     case 'potion': return isKnown(g, it) ? potionDesc(it.type) : 'Неизвестное зелье. Выпейте, чтобы узнать. Или бросьте во врага.';
     case 'scroll': return isKnown(g, it) ? scrollDesc(it.type) : 'Неизвестный свиток. Прочтите, чтобы узнать.';
     case 'wand': return isKnown(g, it) ? wandDesc(it.type) + ` Зарядов: ${it.charges}.` : 'Неизвестная палочка. Взмахните ею, чтобы узнать.';
-    case 'food': return it.type === 'sausage'
+    case 'food': if (g.hero === 'granny' && it.type === 'pie') return `Восстанавливает ${FOODS.pie.heal * 2} здоровья. Свои, домашние.`;
+      return it.type === 'sausage'
       ? `Восстанавливает ${FOODS[it.type].heal} здоровья. Собаки от неё без ума.`
       : `Восстанавливает ${FOODS[it.type].heal} здоровья. Бабушкин рецепт.`;
     case 'knife': return 'Бросьте во врага: урон 2–6.';
@@ -1063,7 +1135,7 @@ function itemPrice(g, it) {
 // ---- 05_game.js ----
 // ===== Игра: состояние, ходы, бой =====
 
-function newGame(seed) {
+function newGame(seed, heroId = 'vasya') {
   seed = (seed === undefined ? (Math.random() * 2 ** 32) >>> 0 : seed >>> 0);
   ITEM_ID = 1;
   const g = {
@@ -1084,22 +1156,41 @@ function newGame(seed) {
     level: null,
   };
   setupAppearances(g);
+  if (!HEROES[heroId]) heroId = 'vasya';
+  const hero = HEROES[heroId];
+  g.hero = heroId;
   g.player = {
-    id: 0, type: 'player', x: 0, y: 0, hp: 24, maxHp: 24, energy: 100, speed: 100,
+    id: 0, type: 'player', x: 0, y: 0, hp: hero.hp, maxHp: hero.hp, energy: 100, speed: 100,
     level: 1, xp: 0, str: 0, gold: 0, inv: [], weapon: null, armor: null, status: {},
     regenClock: 0,
   };
-  const dagger = makeItem('weapon', 'dagger');
-  const jacket = makeItem('armor', 'leather');
-  g.player.inv.push(dagger, jacket, makeItem('food', 'pie'), makeItem('potion', 'heal'));
-  g.player.weapon = dagger;
-  g.player.armor = jacket;
+  const p = g.player;
+  const kit = {
+    vasya: [['weapon', 'dagger'], ['armor', 'leather'], ['food', 'pie'], ['potion', 'heal']],
+    granny: [['weapon', 'rollingpin'], ['armor', 'shawl'], ['food', 'pie', 3], ['food', 'sausage', 1], ['potion', 'heal']],
+    janitor: [['weapon', 'broom'], ['armor', 'quilted'], ['knife', 'knife', 6], ['food', 'pie']],
+  }[heroId];
+  for (const [kind, type, qty] of kit) {
+    const it = makeItem(kind, type, qty ? { qty } : {});
+    p.inv.push(it);
+    if (kind === 'weapon') p.weapon = it;
+    if (kind === 'armor') p.armor = it;
+  }
   g.known.potion.heal = true; // бабушка дала с собой, подписала
+  if (heroId === 'janitor') g.known.scroll.mapping = true; // дворник знает все ходы
   g.tips = {};
-  msg(g, 'Барсик опять провалился в старый колодец. Придётся лезть за ним.', 'story');
+  msg(g, 'Барсик опять провалился в старый колодец.', 'story');
+  msg(g, hero.intro, 'story');
   enterLevel(g, 1);
   msg(g, 'Ходите стрелками или тапом по клетке. «Разведка» исследует уровень сама.', 'hint');
   return g;
+}
+
+function achieve(g, id) {
+  if (!g.achieved) g.achieved = {};
+  if (g.achieved[id]) return;
+  g.achieved[id] = 1;
+  fx(g, { type: 'ach', id });
 }
 
 // Летопись забега: важные события для финального экрана
@@ -1127,6 +1218,7 @@ function fx(g, e) { g.fx.push(e); }
 function enterLevel(g, depth) {
   g.depth = depth;
   g.stats.deepest = Math.max(g.stats.deepest, depth);
+  if (depth >= 5) achieve(g, 'depth5');
   const lv = generateLevel(depth, g.rng);
   lv.seen = new Uint8Array(MAP_W * MAP_H);
   lv.visible = new Uint8Array(MAP_W * MAP_H);
@@ -1488,6 +1580,9 @@ function killMonster(g, m, source) {
     if (!g.slain) g.slain = {};
     if (!g.slain[m.type] && ['ogre', 'necro', 'shade', 'mimic', 'ghost'].includes(m.type)) chron(g, `Первая победа: ${def.name}`);
     g.slain[m.type] = (g.slain[m.type] || 0) + 1;
+    achieve(g, 'first_blood');
+    if (m.type === 'mimic') achieve(g, 'mimic');
+    if (m.type === 'necro') achieve(g, 'necro');
     gainXP(g, def.xp + Math.floor(def.xp * Math.max(0, g.depth - def.depth[0]) * 0.1));
   }
   // Миньоны некроманта рассыпаются вместе с ним
@@ -1520,6 +1615,7 @@ function defeatBoss(g, dog) {
 
 function gainXP(g, n) {
   const p = g.player;
+  if (g.hero === 'vasya') n = Math.round(n * 1.25);
   p.xp += n;
   while (p.xp >= xpToNext(p.level)) {
     p.xp -= xpToNext(p.level);
@@ -1537,6 +1633,7 @@ function levelUp(g) {
   if (p.level % 2 === 1) { p.str++; extra = ', сила +1'; }
   msg(g, `Новый уровень: ${p.level}! Здоровье +${hp}${extra}.`, 'good');
   if (p.level % 3 === 0) chron(g, `Достиг ${p.level} уровня`);
+  if (p.level >= 8) achieve(g, 'veteran');
   fx(g, { type: 'levelup', x: p.x, y: p.y });
   fx(g, { type: 'sound', name: 'levelup' });
 }
@@ -1547,6 +1644,10 @@ function gameOver(g, won, cause) {
   g.stats.killedBy = cause;
   chron(g, won ? 'Спас Барсика' : `Пал в бою. Причина: ${cause}`);
   if (won) {
+    achieve(g, 'rescue');
+    if (g.hero === 'granny') achieve(g, 'granny_win');
+    if (g.hero === 'janitor') achieve(g, 'janitor_win');
+    if (g.turn < 2500) achieve(g, 'fast');
     msg(g, 'Барсик трётся о ваши ноги и громко мурчит. Пора домой!', 'boss');
   } else {
     msg(g, `Вы погибли. Причина: ${cause}.`, 'bad');
@@ -1613,6 +1714,7 @@ function pickUp(g, buy) {
   if (!it || it.kind === 'chest') return false;
   if (it.kind === 'gold') {
     p.gold += it.qty; g.stats.goldFound += it.qty;
+    if (p.gold >= 500) achieve(g, 'rich');
     g.items = g.items.filter((o) => o !== it);
     msg(g, `Вы подбираете ${itemName(g, it)}.`, 'loot');
     fx(g, { type: 'sound', name: 'coin' });
@@ -1640,6 +1742,8 @@ function pickUp(g, buy) {
     addToInventory(g, it);
     msg(g, `Куплено: ${itemName(g, it)} за ${price}. «Приходите ещё!»`, 'shop');
     chron(g, `Купил: ${itemName(g, it)}`);
+    g.stats.bought = (g.stats.bought || 0) + 1;
+    if (g.stats.bought >= 3) achieve(g, 'shopper');
     fx(g, { type: 'sound', name: 'coin' });
     return true;
   }
@@ -1701,6 +1805,14 @@ function playerMove(g, dx, dy) {
     }
     if (target.disguised) revealMimic(g, target);
     attack(g, p, target);
+    // Метла задевает всех врагов вокруг
+    if (p.weapon && WEAPONS[p.weapon.type].sweep) {
+      for (const a of g.actors.slice()) {
+        if (a === target || MONSTERS[a.type].peaceful || a.disguised || dist(a, p) !== 1 || !g.actors.includes(a)) continue;
+        if (g.over) break;
+        attack(g, p, a);
+      }
+    }
     return endTurn(g);
   }
   const t = g.level.tiles[idx(nx, ny)];
@@ -1776,6 +1888,7 @@ function drinkFountain(g, x, y) {
       break;
   }
   chron(g, 'Выпил из фонтана');
+  achieve(g, 'fountain');
   return endTurn(g);
 }
 
@@ -1908,7 +2021,7 @@ function worldTick(g) {
   tickStatus(g, p);
   // Естественное восстановление
   p.regenClock++;
-  const every = Math.max(6, 18 - p.level);
+  const every = Math.max(g.hero === 'granny' ? 4 : 6, (g.hero === 'granny' ? 13 : 18) - p.level);
   if (p.regenClock >= every) {
     p.regenClock = 0;
     if (p.hp < p.maxHp && !p.status.poison) p.hp++;
@@ -2280,7 +2393,7 @@ function useItem(g, it, chosen) {
     removeOne(g, it);
     const f = FOODS[it.type];
     const before = p.hp;
-    p.hp = Math.min(p.maxHp, p.hp + f.heal);
+    p.hp = Math.min(p.maxHp, p.hp + (g.hero === 'granny' && it.type === 'pie' ? f.heal * 2 : f.heal));
     msg(g, it.type === 'pie' ? `Вы съедаете пирожок. Как у бабушки! (+${p.hp - before})` : `Вы съедаете сосиску. Вкусно, хоть и холодная. (+${p.hp - before})`, 'good');
     fx(g, { type: 'float', x: p.x, y: p.y, text: `+${p.hp - before}`, color: '#7cd36a' });
     fx(g, { type: 'sound', name: 'eat' });
@@ -2502,6 +2615,7 @@ function throwItem(g, it, tx, ty) {
         msg(g, 'Щенок хватает сосиску и радостно убегает. Минус один.', 'good');
       } else {
         hitMonster.status.distracted = 5;
+        achieve(g, 'sausage');
         msg(g, 'Древний Пёс забывает обо всём и жуёт сосиску!', 'good');
       }
       fx(g, { type: 'particles', x: lx, y: ly, color: '#e07a5f', n: 10 });
@@ -2574,6 +2688,7 @@ function zapWand(g, it, tx, ty) {
       }
       fx(g, { type: 'bolt', pts, color: '#d9a066', thin: true });
       fx(g, { type: 'shake', power: 3 });
+      if (dug) achieve(g, 'mole');
       msg(g, dug ? 'Камень рассыпается в пыль, открывая проход.' : 'Луч копания ничего не задевает.', wasKnown ? 'info' : 'ident');
       if (!wasKnown) msg(g, 'Это палочка копания.', 'ident');
       break;
@@ -2752,6 +2867,66 @@ const SPRITES = {
     's.uuuu.s',
     '..U..U..',
     '..B..B..',
+  ],
+  granny: [
+    '...gg...',
+    '..gggg..',
+    '.gsssssg',
+    '.dkddkd.',
+    '..ssss..',
+    '.vpvvpv.',
+    'svvvvvvs',
+    '.vvvvvv.',
+  ],
+  janitor: [
+    '..UUUU..',
+    '.UUUUUU.',
+    '.skssks.',
+    '..ssss..',
+    '.oyooyo.',
+    's.oooo.s',
+    '..U..U..',
+    '..B..B..',
+  ],
+  rollingpin: [
+    '........',
+    '........',
+    '........',
+    'bnnnnnnb',
+    'bnnnnnnb',
+    '........',
+    '........',
+    '........',
+  ],
+  broom: [
+    '......b.',
+    '.....b..',
+    '....b...',
+    '...b....',
+    '..yyy...',
+    '.yyyyy..',
+    'yyyyyy..',
+    '.y.y.y..',
+  ],
+  shawl: [
+    '........',
+    'pppppppp',
+    '.pwppwp.',
+    '..pppp..',
+    '...pp...',
+    '........',
+    '........',
+    '........',
+  ],
+  quilted: [
+    '........',
+    '.dd..dd.',
+    '.dddddd.',
+    '.kkkkkk.',
+    '..dddd..',
+    '..kkkk..',
+    '..dddd..',
+    '........',
   ],
   rat: [
     '........',
@@ -3366,6 +3541,7 @@ function consumeFx(g) {
       case 'levelin': R.fadeIn = 1; R.anim.clear(); R.cam.init = false; R.floats = []; R.particles = []; R.deaths = []; break;
       case 'boss': R.bossPulse = 1; break;
       case 'sound': playSound(e.name); break;
+      case 'ach': if (typeof onAchievement === 'function') onAchievement(e.id); break;
     }
   }
   g.fx.length = 0;
@@ -3570,7 +3746,7 @@ function renderFrame(g, dt) {
     ctx.ellipse(dx + ts / 2, dy + ts * 0.9, ts * 0.3, ts * 0.09, 0, 0, Math.PI * 2);
     ctx.fill();
     if (g.over && !g.over.won) ctx.globalAlpha = 0.4;
-    drawSprite(ctx, 'player', dx + ts * 0.06, dy + ts * 0.04, ts * 0.88, 1, null, an.flash > 0.5 ? '#ff6b5e' : null);
+    drawSprite(ctx, (HEROES[g.hero] || HEROES.vasya).sprite, dx + ts * 0.06, dy + ts * 0.04, ts * 0.88, 1, null, an.flash > 0.5 ? '#ff6b5e' : null);
     ctx.globalAlpha = 1;
     if (p.status.haste) { ctx.fillStyle = 'rgba(159,226,255,0.5)'; ctx.fillRect(dx - ts * 0.12, dy + ts * 0.4, ts * 0.12, 2); ctx.fillRect(dx - ts * 0.2, dy + ts * 0.6, ts * 0.16, 2); }
   }
@@ -3787,6 +3963,26 @@ function noise(dur, vol = 0.4, freq = 1200, delay = 0) {
   src.start(t);
 }
 
+// Фон: редкие капли, шорохи, далёкий лай в логове
+let _ambientNext = 0;
+function ambientTick(theme, now) {
+  if (!AUDIO.on || !AUDIO.ctx || AUDIO.ctx.state !== 'running') return;
+  if (now < _ambientNext) return;
+  _ambientNext = now + 5000 + Math.random() * 9000;
+  try {
+    const r = Math.random();
+    if (theme === 'lair' && r < 0.35) {
+      tone(140, 0.12, 'sawtooth', 0.05, -60); tone(140, 0.12, 'sawtooth', 0.04, -60, 0.2); // далёкое «гав-гав»
+    } else if (theme === 'caves' && r < 0.4) {
+      noise(0.6, 0.04, 500); // шорох
+    } else {
+      const f = 1400 + Math.random() * 900; // капля
+      tone(f, 0.12, 'sine', 0.07, -f * 0.5);
+      if (Math.random() < 0.5) tone(f * 0.8, 0.1, 'sine', 0.04, -f * 0.4, 0.35 + Math.random() * 0.3);
+    }
+  } catch (e) { /* не страшно */ }
+}
+
 function playSound(name) {
   if (!AUDIO.on || !AUDIO.ctx) return;
   // Не долбим один и тот же звук чаще 40 мс
@@ -3831,10 +4027,40 @@ function playSound(name) {
 // ===== Интерфейс: HUD, окна, управление =====
 
 let G = null;
-const UI = { auto: null, targeting: null, modal: null, endTimer: null, saveTurn: 0, longPress: null, lastLog: null };
+const UI = { hero: 'vasya', auto: null, targeting: null, modal: null, endTimer: null, saveTurn: 0, longPress: null, lastLog: null };
 const SAVE_KEY = 'well-save-v1';
 const REC_KEY = 'well-records-v1';
 const SET_KEY = 'well-settings-v1';
+const ACH_KEY = 'well-achievements-v1';
+
+function loadAch() { try { return JSON.parse(load(ACH_KEY) || '{}'); } catch (e) { return {}; } }
+
+function onAchievement(id) {
+  if (!G || G._demo || !ACHIEVEMENTS[id]) return;
+  const got = loadAch();
+  if (got[id]) return;
+  got[id] = Date.now();
+  store(ACH_KEY, JSON.stringify(got));
+  toast(`Достижение: ${ACHIEVEMENTS[id][0]}`, ACHIEVEMENTS[id][1]);
+  playSound('chest');
+}
+
+function toast(title, text) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<b>${esc(title)}</b><span>${esc(text)}</span>`;
+  $('stage').appendChild(el);
+  setTimeout(() => el.classList.add('out'), 3200);
+  setTimeout(() => el.remove(), 3800);
+}
+
+function showAchievements() {
+  const got = loadAch();
+  const n = Object.keys(ACHIEVEMENTS).filter((k) => got[k]).length;
+  openModal(`<div class="sheet" role="dialog" aria-label="Достижения">
+    <header><h2>Достижения</h2><span style="color:var(--dim);font:13px var(--font-display)">${n}/${Object.keys(ACHIEVEMENTS).length}</span><button class="close" aria-label="Закрыть">×</button></header>
+    <div class="body"><ul class="ach">${Object.entries(ACHIEVEMENTS).map(([k, [t, d]]) => `<li class="${got[k] ? 'got' : ''}"><b>${esc(t)}</b><span>${esc(d)}</span></li>`).join('')}</ul></div></div>`);
+}
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -3848,6 +4074,7 @@ function boot(hot) {
   initRenderer($('view'), $('mini'));
   const settings = JSON.parse(load(SET_KEY) || '{}');
   AUDIO.on = settings.sound !== false;
+  if (HEROES[settings.hero]) UI.hero = settings.hero;
   if (settings.mini === false) $('mini').hidden = true;
   syncSoundBtn();
   bindInput();
@@ -3871,7 +4098,11 @@ function boot(hot) {
   const frame = (t) => {
     const dt = Math.min(0.1, Math.max(0, (t - last) / 1000));
     last = t;
-    if (G) { consumeFx(G); renderFrame(G, dt); }
+    if (G) {
+      consumeFx(G);
+      renderFrame(G, dt);
+      if ($('title').hidden && !G.over) ambientTick(G.level.theme, t);
+    }
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
@@ -3881,7 +4112,7 @@ function startNewGame(seed) {
   stopAuto();
   cancelTargeting();
   clearTimeout(UI.endTimer);
-  G = newGame(seed);
+  G = newGame(seed, UI.hero);
   UI.lastLog = null;
   R.mapKey = '';
   hideTitle();
@@ -4376,7 +4607,7 @@ function chronicleHTML() {
 function addRecord() {
   const recs = JSON.parse(load(REC_KEY) || '[]');
   const o = G.over;
-  recs.push({ score: o.score, won: o.won, depth: G.stats.deepest, cause: o.cause, level: G.player.level, seed: G.seed, date: Date.now() });
+  recs.push({ hero: G.hero, score: o.score, won: o.won, depth: G.stats.deepest, cause: o.cause, level: G.player.level, seed: G.seed, date: Date.now() });
   recs.sort((a, b) => b.score - a.score);
   store(REC_KEY, JSON.stringify(recs.slice(0, 8)));
 }
@@ -4392,14 +4623,20 @@ function showTitle() {
     <canvas id="t-cat" width="40" height="40" aria-hidden="true"></canvas>
     <h1>Кот в колодце</h1>
     <p class="sub">Барсик опять провалился в старый колодец. Внизу десять глубин: подвал, катакомбы, пещеры и логово Древнего Пса. Пошаговый рогалик: каждый спуск новый.</p>
+    <div class="heroes" role="radiogroup" aria-label="Герой">
+      ${Object.entries(HEROES).map(([id, h]) => `<button role="radio" aria-checked="${UI.hero === id}" data-hero="${id}">
+        <img src="${spriteURL(h.sprite)}" alt="" width="40" height="40"><b>${esc(h.name)}</b><small>${esc(h.about)}</small></button>`).join('')}
+    </div>
+    <p class="hero-about" id="t-about">${esc(HEROES[UI.hero].about)}</p>
     <div class="menu">
       ${save ? '<button class="btn" id="t-cont">Продолжить забег</button>' : ''}
       <button class="btn ${save ? 'ghost' : ''}" id="t-new">Новая игра</button>
       <button class="btn ghost" id="t-daily">Забег дня · ${esc(todayLabel())}</button>
       <button class="btn ghost" id="t-help">Как играть</button>
+      <button class="btn ghost" id="t-ach">Достижения · ${Object.keys(loadAch()).filter((k) => ACHIEVEMENTS[k]).length}/${Object.keys(ACHIEVEMENTS).length}</button>
     </div>
     <div class="seed"><label for="t-seed">Сид (необязательно):</label><input id="t-seed" inputmode="numeric" placeholder="случайный"></div>
-    ${recs.length ? `<div class="records"><h3>Лучшие забеги</h3><ol>${recs.map((r) => `<li><b>${r.score}</b><span>${r.won ? 'Барсик спасён' : `глубина ${r.depth}, ${esc(r.cause || '')}`}</span><span style="flex:none">ур ${r.level}</span></li>`).join('')}</ol></div>` : ''}`;
+    ${recs.length ? `<div class="records"><h3>Лучшие забеги</h3><ol>${recs.map((r) => `<li><b>${r.score}</b><span>${r.won ? 'Барсик спасён' : `глубина ${r.depth}, ${esc(r.cause || '')}`}</span><span style="flex:none">${esc((HEROES[r.hero] || HEROES.vasya).name)}, ур ${r.level}</span></li>`).join('')}</ol></div>` : ''}`;
   t.hidden = false;
   if ($('t-cont')) $('t-cont').onclick = () => {
     try { G = deserializeGame(save); R.mapKey = ''; R.anim.clear(); R.cam.init = false; hideTitle(); afterAction(true); }
@@ -4411,6 +4648,16 @@ function showTitle() {
     startNewGame(v && /^\d+$/.test(v) ? Number(v) : undefined);
   };
   $('t-help').onclick = () => showHelp();
+  $('t-ach').onclick = () => showAchievements();
+  t.querySelectorAll('[data-hero]').forEach((b) => {
+    b.onclick = () => {
+      UI.hero = b.dataset.hero;
+      saveSettings();
+      playSound('click');
+      t.querySelectorAll('[data-hero]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+      $('t-about').textContent = HEROES[UI.hero].about;
+    };
+  });
   $('t-daily').onclick = () => { audioInit(); startNewGame(dailySeed()); };
   animateTitleCat();
 }
@@ -4523,7 +4770,7 @@ function toggleMini() {
   saveSettings();
 }
 
-function saveSettings() { store(SET_KEY, JSON.stringify({ sound: AUDIO.on, mini: !$('mini').hidden })); }
+function saveSettings() { store(SET_KEY, JSON.stringify({ sound: AUDIO.on, mini: !$('mini').hidden, hero: UI.hero })); }
 function syncSoundBtn() { $('btn-sound').setAttribute('aria-pressed', String(AUDIO.on)); }
 
 function onTapTile(tx, ty) {
