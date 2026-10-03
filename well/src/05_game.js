@@ -39,6 +39,12 @@ function newGame(seed) {
   return g;
 }
 
+// Летопись забега: важные события для финального экрана
+function chron(g, text) {
+  if (!g.chronicle) g.chronicle = [];
+  g.chronicle.push({ depth: g.depth, turn: g.turn, text });
+}
+
 // Подсказка, которая показывается один раз за игру
 function tip(g, key, text) {
   if (!g.tips) g.tips = {};
@@ -72,6 +78,7 @@ function enterLevel(g, depth) {
   populate(g);
   updateFOV(g);
   const th = THEMES[lv.theme];
+  if (depth > 1 && (depth === 4 || depth === 7 || depth === MAX_DEPTH)) chron(g, `Спустился: ${th.name}`);
   if (depth === MAX_DEPTH) {
     msg(g, `Глубина ${depth}. ${th.name}.`, 'depth');
     msg(g, th.ambient, 'story');
@@ -336,8 +343,9 @@ function attack(g, att, def, opts = {}) {
   dmg = Math.max(0, dmg - block);
   if (isPlayer) {
     const n = MONSTERS[def.type].acc;
-    if (dmg === 0) msg(g, `Вы бьёте ${n}, но удар не пробивает защиту.`, 'miss');
-    else msg(g, `${crit ? 'Сильный удар! ' : ''}Вы бьёте ${n}.`, 'hit');
+    const verb = ranged ? 'попадаете в' : 'бьёте';
+    if (dmg === 0) msg(g, `Вы ${verb} ${n}, но удар не пробивает защиту.`, 'miss');
+    else msg(g, `${crit ? (ranged ? 'Точно в цель! ' : 'Сильный удар! ') : ''}Вы ${verb} ${n}.`, 'hit');
   } else if (def === g.player) {
     const d = MONSTERS[att.type];
     if (dmg === 0) msg(g, `${capitalize(d.name)} ${d.verb} вас, но броня выдерживает.`, 'miss');
@@ -414,6 +422,9 @@ function killMonster(g, m, source) {
   }
   if (source === g.player || (source && source.byPlayer)) {
     g.stats.kills++;
+    if (!g.slain) g.slain = {};
+    if (!g.slain[m.type] && ['ogre', 'necro', 'shade', 'mimic', 'ghost'].includes(m.type)) chron(g, `Первая победа: ${def.name}`);
+    g.slain[m.type] = (g.slain[m.type] || 0) + 1;
     gainXP(g, def.xp + Math.floor(def.xp * Math.max(0, g.depth - def.depth[0]) * 0.1));
   }
   // Миньоны некроманта рассыпаются вместе с ним
@@ -438,6 +449,7 @@ function defeatBoss(g, dog) {
     for (let dx = -1; dx <= 1; dx++)
       if (g.level.tiles[idx(c.x + dx, c.y + dy)] === T.BARS) g.level.tiles[idx(c.x + dx, c.y + dy)] = T.FLOOR;
   g.level.cageOpen = true;
+  chron(g, 'Победил Древнего Пса');
   g.stats.kills++;
   gainXP(g, 50);
   updateFOV(g);
@@ -461,6 +473,7 @@ function levelUp(g) {
   let extra = '';
   if (p.level % 2 === 1) { p.str++; extra = ', сила +1'; }
   msg(g, `Новый уровень: ${p.level}! Здоровье +${hp}${extra}.`, 'good');
+  if (p.level % 3 === 0) chron(g, `Достиг ${p.level} уровня`);
   fx(g, { type: 'levelup', x: p.x, y: p.y });
   fx(g, { type: 'sound', name: 'levelup' });
 }
@@ -469,6 +482,7 @@ function gameOver(g, won, cause) {
   if (g.over) return;
   g.over = { won, cause, turn: g.turn, depth: g.depth, score: computeScore(g, won) };
   g.stats.killedBy = cause;
+  chron(g, won ? 'Спас Барсика' : `Пал в бою. Причина: ${cause}`);
   if (won) {
     msg(g, 'Барсик трётся о ваши ноги и громко мурчит. Пора домой!', 'boss');
   } else {
@@ -562,6 +576,7 @@ function pickUp(g, buy) {
     g.items = g.items.filter((o) => o !== it);
     addToInventory(g, it);
     msg(g, `Куплено: ${itemName(g, it)} за ${price}. «Приходите ещё!»`, 'shop');
+    chron(g, `Купил: ${itemName(g, it)}`);
     fx(g, { type: 'sound', name: 'coin' });
     return true;
   }
@@ -631,6 +646,8 @@ function playerMove(g, dx, dy) {
     fx(g, { type: 'sound', name: 'door' });
     return endTurn(g);
   }
+  if (t === T.FOUNTAIN) return drinkFountain(g, nx, ny);
+  if (t === T.DRY) { msg(g, 'Фонтан высох. Только мох и пара монеток на дне... нет, показалось.', 'info'); return false; }
   if (t === T.BARS) {
     msg(g, 'Прочная решётка. Сквозь неё виден Барсик.', 'info');
     return false;
@@ -654,6 +671,48 @@ function playerMove(g, dx, dy) {
   }
   if (t === T.STAIRS && !g.over) msg(g, 'Здесь лестница вниз. Нажмите «Вниз» или >. Назад подняться не получится.', 'hint');
   if (g.level.shop && inRoom(g.level.shop, nx, ny)) tip(g, 'shop', 'Это лавка. Встаньте на товар и нажмите «Купить».');
+  return endTurn(g);
+}
+
+function drinkFountain(g, x, y) {
+  const p = g.player, rng = g.rng;
+  g.level.tiles[idx(x, y)] = T.DRY;
+  fx(g, { type: 'particles', x, y, color: '#8fd3ff', n: 16 });
+  fx(g, { type: 'sound', name: 'drink' });
+  const roll = rng.weighted([['heal', 40], ['potion', 25], ['wish', 8], ['gold', 12], ['bad', 15]]);
+  switch (roll) {
+    case 'heal': {
+      const before = p.hp;
+      p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * 0.5));
+      p.status.poison = 0;
+      msg(g, `Вы пьёте из фонтана. Вода ледяная и вкусная. (+${p.hp - before})`, 'good');
+      break;
+    }
+    case 'potion': {
+      const type = rng.pick(['strength', 'vision', 'haste', 'regen']);
+      msg(g, 'Вы пьёте из фонтана. У воды странный привкус...', 'info');
+      drinkPotion(g, type);
+      break;
+    }
+    case 'wish':
+      msg(g, 'Вы пьёте из фонтана и загадываете желание. На дне что-то блестит!', 'good');
+      dropItem(g, makeItem('scroll', 'enchant'), x, y);
+      break;
+    case 'gold': {
+      const n = rng.int(15, 30) + g.depth * 5;
+      msg(g, 'Вода уходит, а на дне лежат монеты. Кто-то загадывал желания до вас.', 'loot');
+      dropItem(g, makeItem('gold', 'gold', { qty: n }), x, y);
+      break;
+    }
+    case 'bad':
+      msg(g, 'Вы пьёте из фонтана. Фу, тухлая! Из глубины выползает что-то склизкое.', 'bad');
+      for (const [dx, dy] of rng.shuffle(DIRS8.slice())) {
+        const nx = x + dx, ny = y + dy;
+        if (g.level.tiles[idx(nx, ny)] === T.FLOOR && !occupied(g, nx, ny)) { spawnMonster(g, 'slime', nx, ny, { awake: true }); break; }
+      }
+      break;
+  }
+  chron(g, 'Выпил из фонтана');
   return endTurn(g);
 }
 

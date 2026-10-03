@@ -320,7 +320,7 @@ function describeTile(x, y) {
     if (it) msg(G, `${capitalize(itemName(G, it))}${it.price ? ` — ${it.price} мон.` : ''}. ${itemDesc(G, it)}`, 'hint');
     else if (tr && !tr.hidden) msg(G, `Ловушка: ${trapName(tr.type)}.`, 'hint');
     else {
-      const names = { [T.WALL]: 'Стена.', [T.FLOOR]: 'Пол.', [T.DOOR]: 'Закрытая дверь.', [T.ODOOR]: 'Открытая дверь.', [T.STAIRS]: 'Лестница вниз.', [T.UPSTAIRS]: 'Сюда вы спустились. Назад пути нет.', [T.WATER]: 'Неглубокая вода.', [T.GRASS]: 'Высокая трава. За ней ничего не видно.', [T.BARS]: 'Решётка клетки.' };
+      const names = { [T.WALL]: 'Стена.', [T.FLOOR]: 'Пол.', [T.DOOR]: 'Закрытая дверь.', [T.ODOOR]: 'Открытая дверь.', [T.STAIRS]: 'Лестница вниз.', [T.UPSTAIRS]: 'Сюда вы спустились. Назад пути нет.', [T.WATER]: 'Неглубокая вода.', [T.GRASS]: 'Высокая трава. За ней ничего не видно.', [T.BARS]: 'Решётка клетки.', [T.FOUNTAIN]: 'Фонтан. Можно попить, если не боитесь.', [T.DRY]: 'Высохший фонтан.' };
       msg(G, names[lv.tiles[idx(x, y)]] || 'Что-то непонятное.', 'hint');
     }
   }
@@ -342,6 +342,15 @@ function closeModal() {
   $('modal').hidden = true;
   $('modal').innerHTML = '';
   UI.modal = null;
+}
+
+function spriteURL(name) {
+  const c = document.createElement('canvas');
+  c.width = 40; c.height = 40;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(getSprite(name), 0, 0, 40, 40);
+  return c.toDataURL();
 }
 
 const _iconCache = new Map();
@@ -493,7 +502,7 @@ function showEnd() {
     ? ['Барсик спасён!', `Вы выбрались из колодца с котом на руках за ${G.turn} ${plural(G.turn, 'ход', 'хода', 'ходов')}. Барсик делает вид, что так и было задумано.`]
     : ['Конец пути', `Глубина ${o.depth}. Вас одолел: ${o.cause}. Барсик всё ещё ждёт внизу.`];
   openModal(`<div class="sheet" role="dialog" aria-label="${esc(lines[0])}">
-    <header><h2>${esc(lines[0])}</h2></header>
+    <header><img src="${spriteURL(won ? 'cat' : 'dog')}" alt="" width="40" height="40" style="image-rendering:pixelated"><h2>${esc(lines[0])}</h2></header>
     <div class="body">
       <p style="margin-top:8px">${esc(lines[1])}</p>
       <div class="end-stats">
@@ -504,6 +513,7 @@ function showEnd() {
         <div><small>Монеты</small><b>${p.gold}</b></div>
         <div><small>Ходов</small><b>${G.turn}</b></div>
       </div>
+      ${chronicleHTML()}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" id="e-again">Ещё раз</button>
         <button class="btn ghost" id="e-seed">Тот же сид (${G.seed})</button>
@@ -514,6 +524,23 @@ function showEnd() {
     $('e-seed').onclick = () => startNewGame(G.seed);
     $('e-title').onclick = () => { closeModal(); showTitle(); };
   });
+}
+
+function showHistory() {
+  const items = G.messages.slice(-80).map((m) => `<p class="${esc(m.cls)}" style="margin:0 0 3px">${esc(m.text)}</p>`).join('');
+  openModal(`<div class="sheet" role="dialog" aria-label="Журнал">
+    <header><h2>Журнал</h2><button class="close" aria-label="Закрыть">×</button></header>
+    <div class="body log-full">${items}</div></div>`, (m) => {
+    const b = m.querySelector('.body');
+    b.scrollTop = b.scrollHeight;
+  });
+}
+
+function chronicleHTML() {
+  const c = (G.chronicle || []).slice(-9);
+  if (!c.length) return '';
+  return `<h3 style="font:600 14px var(--font-display);color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin:14px 0 6px">Летопись</h3>
+    <ol class="chron">${c.map((e) => `<li><span>гл. ${e.depth}</span>${esc(e.text)}</li>`).join('')}</ol>`;
 }
 
 function addRecord() {
@@ -687,7 +714,7 @@ function onTapTile(tx, ty) {
   }
   if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) { move(dx, dy); return; }
   if (!inBounds(tx, ty) || !G.level.seen[idx(tx, ty)]) return;
-  if (!isPassableTile(G.level.tiles[idx(tx, ty)]) && !actorAt(G, tx, ty)) {
+  if (!isPassableTile(G.level.tiles[idx(tx, ty)]) && !actorAt(G, tx, ty) && G.level.tiles[idx(tx, ty)] !== T.FOUNTAIN) {
     // Тап по стене — идём к ближайшей проходимой клетке рядом
     return;
   }
@@ -760,6 +787,7 @@ function bindInput() {
   $('btn-help').onclick = showHelp;
   $('btn-menu').onclick = showMenu;
   $('mini').onclick = toggleMini;
+  $('log').onclick = () => { if (G && $('title').hidden) showHistory(); };
   $('modal').addEventListener('pointerdown', (e) => { if (e.target === $('modal') && (!G || !G.over)) closeModal(); });
   if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => resizeRenderer()).observe($('stage'));
 }

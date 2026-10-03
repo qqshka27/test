@@ -208,6 +208,7 @@ function casterAI(g, m, sees) {
 }
 
 function bossIntro(g, m) {
+  chron(g, 'Разбудил Древнего Пса');
   msg(g, 'Древний Пёс поднимает голову. Глаза размером с блюдца.', 'boss');
   msg(g, '«ГАВ!» — земля дрожит. Барсик в клетке шипит.', 'boss');
   fx(g, { type: 'shake', power: 7 });

@@ -211,6 +211,14 @@ function generateLevel(depth, rng) {
   }
   tiles[idx(start.x, start.y)] = T.UPSTAIRS;
   tiles[idx(far.x, far.y)] = T.STAIRS;
+  // Иногда в центре комнаты стоит фонтан
+  if (rooms.length && rng.chance(0.4)) {
+    const r = rng.pick(rooms.filter((q) => q.w >= 5 && q.h >= 5).concat([null])) || null;
+    if (r) {
+      const c = roomCenter(r);
+      if (tiles[idx(c.x, c.y)] === T.FLOOR) tiles[idx(c.x, c.y)] = T.FOUNTAIN;
+    }
+  }
   return { tiles, rooms, start, stairs: far, theme };
 }
 

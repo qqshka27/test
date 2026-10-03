@@ -84,6 +84,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lantern); o
 .log {
   background: var(--panel); border-top: 1px solid var(--line); padding: 6px 16px; height: 5.6em; overflow: hidden;
   display: flex; flex-direction: column; justify-content: flex-end; font-size: 14px; line-height: 1.35;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 1.1em); mask-image: linear-gradient(to bottom, transparent 0, #000 1.1em);
 }
 .log p { margin: 0; color: var(--dim); }
 .log p.new { color: var(--ink); }
@@ -178,6 +179,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lantern); o
 .end-stats div { background: var(--panel-2); border-radius: 6px; padding: 8px 10px; }
 .end-stats small { display: block; color: var(--dim); font-size: 12px; }
 .end-stats b { font: 600 20px var(--font-display); font-variant-numeric: tabular-nums; }
+.log { cursor: pointer; }
+.log-full { font-size: 14px; color: var(--dim); }
+.log-full .bad { color: var(--bad); } .log-full .good { color: var(--good); } .log-full .loot { color: var(--gold); }
+.log-full .story { color: #e3c08f; font-style: italic; } .log-full .depth { color: var(--lantern); font-family: var(--font-display); margin-top: 8px !important; }
+.log-full .boss { color: #ff9ab0; font-weight: 700; } .log-full .ident { color: var(--magic); } .log-full .shop { color: #9fe2ff; } .log-full .hit, .log-full .kill { color: var(--ink); }
+.chron { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 4px; }
+.chron li { display: flex; gap: 10px; font-size: 14px; }
+.chron li span { font: 13px var(--font-display); color: var(--lantern); min-width: 3.4em; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .bar i, .xpbar i { transition: none; } }
 </style>
 
@@ -250,6 +259,8 @@ const T = {
   GRASS: 7,
   CHASM: 8,
   BARS: 9, // решётка клетки: непроходима, но прозрачна
+  FOUNTAIN: 10, // фонтан: из него пьют, подойдя вплотную
+  DRY: 11, // высохший фонтан
 };
 
 const DIRS8 = [
@@ -731,6 +742,14 @@ function generateLevel(depth, rng) {
   }
   tiles[idx(start.x, start.y)] = T.UPSTAIRS;
   tiles[idx(far.x, far.y)] = T.STAIRS;
+  // Иногда в центре комнаты стоит фонтан
+  if (rooms.length && rng.chance(0.4)) {
+    const r = rng.pick(rooms.filter((q) => q.w >= 5 && q.h >= 5).concat([null])) || null;
+    if (r) {
+      const c = roomCenter(r);
+      if (tiles[idx(c.x, c.y)] === T.FLOOR) tiles[idx(c.x, c.y)] = T.FOUNTAIN;
+    }
+  }
   return { tiles, rooms, start, stairs: far, theme };
 }
 
@@ -1076,6 +1095,12 @@ function newGame(seed) {
   return g;
 }
 
+// Летопись забега: важные события для финального экрана
+function chron(g, text) {
+  if (!g.chronicle) g.chronicle = [];
+  g.chronicle.push({ depth: g.depth, turn: g.turn, text });
+}
+
 // Подсказка, которая показывается один раз за игру
 function tip(g, key, text) {
   if (!g.tips) g.tips = {};
@@ -1109,6 +1134,7 @@ function enterLevel(g, depth) {
   populate(g);
   updateFOV(g);
   const th = THEMES[lv.theme];
+  if (depth > 1 && (depth === 4 || depth === 7 || depth === MAX_DEPTH)) chron(g, `Спустился: ${th.name}`);
   if (depth === MAX_DEPTH) {
     msg(g, `Глубина ${depth}. ${th.name}.`, 'depth');
     msg(g, th.ambient, 'story');
@@ -1373,8 +1399,9 @@ function attack(g, att, def, opts = {}) {
   dmg = Math.max(0, dmg - block);
   if (isPlayer) {
     const n = MONSTERS[def.type].acc;
-    if (dmg === 0) msg(g, `Вы бьёте ${n}, но удар не пробивает защиту.`, 'miss');
-    else msg(g, `${crit ? 'Сильный удар! ' : ''}Вы бьёте ${n}.`, 'hit');
+    const verb = ranged ? 'попадаете в' : 'бьёте';
+    if (dmg === 0) msg(g, `Вы ${verb} ${n}, но удар не пробивает защиту.`, 'miss');
+    else msg(g, `${crit ? (ranged ? 'Точно в цель! ' : 'Сильный удар! ') : ''}Вы ${verb} ${n}.`, 'hit');
   } else if (def === g.player) {
     const d = MONSTERS[att.type];
     if (dmg === 0) msg(g, `${capitalize(d.name)} ${d.verb} вас, но броня выдерживает.`, 'miss');
@@ -1451,6 +1478,9 @@ function killMonster(g, m, source) {
   }
   if (source === g.player || (source && source.byPlayer)) {
     g.stats.kills++;
+    if (!g.slain) g.slain = {};
+    if (!g.slain[m.type] && ['ogre', 'necro', 'shade', 'mimic', 'ghost'].includes(m.type)) chron(g, `Первая победа: ${def.name}`);
+    g.slain[m.type] = (g.slain[m.type] || 0) + 1;
     gainXP(g, def.xp + Math.floor(def.xp * Math.max(0, g.depth - def.depth[0]) * 0.1));
   }
   // Миньоны некроманта рассыпаются вместе с ним
@@ -1475,6 +1505,7 @@ function defeatBoss(g, dog) {
     for (let dx = -1; dx <= 1; dx++)
       if (g.level.tiles[idx(c.x + dx, c.y + dy)] === T.BARS) g.level.tiles[idx(c.x + dx, c.y + dy)] = T.FLOOR;
   g.level.cageOpen = true;
+  chron(g, 'Победил Древнего Пса');
   g.stats.kills++;
   gainXP(g, 50);
   updateFOV(g);
@@ -1498,6 +1529,7 @@ function levelUp(g) {
   let extra = '';
   if (p.level % 2 === 1) { p.str++; extra = ', сила +1'; }
   msg(g, `Новый уровень: ${p.level}! Здоровье +${hp}${extra}.`, 'good');
+  if (p.level % 3 === 0) chron(g, `Достиг ${p.level} уровня`);
   fx(g, { type: 'levelup', x: p.x, y: p.y });
   fx(g, { type: 'sound', name: 'levelup' });
 }
@@ -1506,6 +1538,7 @@ function gameOver(g, won, cause) {
   if (g.over) return;
   g.over = { won, cause, turn: g.turn, depth: g.depth, score: computeScore(g, won) };
   g.stats.killedBy = cause;
+  chron(g, won ? 'Спас Барсика' : `Пал в бою. Причина: ${cause}`);
   if (won) {
     msg(g, 'Барсик трётся о ваши ноги и громко мурчит. Пора домой!', 'boss');
   } else {
@@ -1599,6 +1632,7 @@ function pickUp(g, buy) {
     g.items = g.items.filter((o) => o !== it);
     addToInventory(g, it);
     msg(g, `Куплено: ${itemName(g, it)} за ${price}. «Приходите ещё!»`, 'shop');
+    chron(g, `Купил: ${itemName(g, it)}`);
     fx(g, { type: 'sound', name: 'coin' });
     return true;
   }
@@ -1668,6 +1702,8 @@ function playerMove(g, dx, dy) {
     fx(g, { type: 'sound', name: 'door' });
     return endTurn(g);
   }
+  if (t === T.FOUNTAIN) return drinkFountain(g, nx, ny);
+  if (t === T.DRY) { msg(g, 'Фонтан высох. Только мох и пара монеток на дне... нет, показалось.', 'info'); return false; }
   if (t === T.BARS) {
     msg(g, 'Прочная решётка. Сквозь неё виден Барсик.', 'info');
     return false;
@@ -1691,6 +1727,48 @@ function playerMove(g, dx, dy) {
   }
   if (t === T.STAIRS && !g.over) msg(g, 'Здесь лестница вниз. Нажмите «Вниз» или >. Назад подняться не получится.', 'hint');
   if (g.level.shop && inRoom(g.level.shop, nx, ny)) tip(g, 'shop', 'Это лавка. Встаньте на товар и нажмите «Купить».');
+  return endTurn(g);
+}
+
+function drinkFountain(g, x, y) {
+  const p = g.player, rng = g.rng;
+  g.level.tiles[idx(x, y)] = T.DRY;
+  fx(g, { type: 'particles', x, y, color: '#8fd3ff', n: 16 });
+  fx(g, { type: 'sound', name: 'drink' });
+  const roll = rng.weighted([['heal', 40], ['potion', 25], ['wish', 8], ['gold', 12], ['bad', 15]]);
+  switch (roll) {
+    case 'heal': {
+      const before = p.hp;
+      p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * 0.5));
+      p.status.poison = 0;
+      msg(g, `Вы пьёте из фонтана. Вода ледяная и вкусная. (+${p.hp - before})`, 'good');
+      break;
+    }
+    case 'potion': {
+      const type = rng.pick(['strength', 'vision', 'haste', 'regen']);
+      msg(g, 'Вы пьёте из фонтана. У воды странный привкус...', 'info');
+      drinkPotion(g, type);
+      break;
+    }
+    case 'wish':
+      msg(g, 'Вы пьёте из фонтана и загадываете желание. На дне что-то блестит!', 'good');
+      dropItem(g, makeItem('scroll', 'enchant'), x, y);
+      break;
+    case 'gold': {
+      const n = rng.int(15, 30) + g.depth * 5;
+      msg(g, 'Вода уходит, а на дне лежат монеты. Кто-то загадывал желания до вас.', 'loot');
+      dropItem(g, makeItem('gold', 'gold', { qty: n }), x, y);
+      break;
+    }
+    case 'bad':
+      msg(g, 'Вы пьёте из фонтана. Фу, тухлая! Из глубины выползает что-то склизкое.', 'bad');
+      for (const [dx, dy] of rng.shuffle(DIRS8.slice())) {
+        const nx = x + dx, ny = y + dy;
+        if (g.level.tiles[idx(nx, ny)] === T.FLOOR && !occupied(g, nx, ny)) { spawnMonster(g, 'slime', nx, ny, { awake: true }); break; }
+      }
+      break;
+  }
+  chron(g, 'Выпил из фонтана');
   return endTurn(g);
 }
 
@@ -2076,6 +2154,7 @@ function casterAI(g, m, sees) {
 }
 
 function bossIntro(g, m) {
+  chron(g, 'Разбудил Древнего Пса');
   msg(g, 'Древний Пёс поднимает голову. Глаза размером с блюдца.', 'boss');
   msg(g, '«ГАВ!» — земля дрожит. Барсик в клетке шипит.', 'boss');
   fx(g, { type: 'shake', power: 7 });
@@ -3232,6 +3311,17 @@ function drawTilePixels(ctx, lv, th, x, y) {
         px(ctx, shade(th.grass, 1.35), gx, gy, 1, 1);
       }
       break;
+    case T.FOUNTAIN:
+    case T.DRY: {
+      drawFloorPixels(ctx, th, X, Y, x, y);
+      px(ctx, '#7a7f8e', X + 1, Y + 3, 6, 4);
+      px(ctx, '#a0a5b4', X + 1, Y + 3, 6, 1);
+      px(ctx, '#5a5f6e', X + 1, Y + 6, 6, 1);
+      px(ctx, '#8a8f9e', X + 3, Y + 1, 2, 2);
+      px(ctx, t === T.FOUNTAIN ? '#4f9fe0' : '#4a3a2a', X + 2, Y + 4, 4, 2);
+      if (t === T.FOUNTAIN) px(ctx, '#bfe6ff', X + 3, Y + 4, 1, 1);
+      break;
+    }
     case T.BARS:
       drawFloorPixels(ctx, th, X, Y, x, y);
       for (let i = 0; i < 4; i++) px(ctx, '#8a8f9e', X + 1 + i * 2, Y, 1, 8);
@@ -3340,6 +3430,18 @@ function renderFrame(g, dt) {
       ctx.fillStyle = 'rgba(180,220,255,0.10)';
       const wy = (Math.sin(ph) * 0.5 + 0.5) * ts * 0.7;
       ctx.fillRect(toX(x) + ts * 0.15, toY(y) + wy, ts * 0.5, Math.max(1, ts / 8));
+    }
+  }
+
+  // Брызги фонтанов
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    if (lv.tiles[idx(x, y)] === T.FOUNTAIN && lv.visible[idx(x, y)]) {
+      for (let k2 = 0; k2 < 3; k2++) {
+        const ph = (R.time * 1.4 + k2 / 3 + x * 0.1) % 1;
+        ctx.fillStyle = `rgba(190,230,255,${(1 - ph) * 0.8})`;
+        const s2 = Math.max(2, ts / 12);
+        ctx.fillRect(toX(x) + ts * (0.5 + (k2 - 1) * 0.18 * ph) - s2 / 2, toY(y) + ts * (0.2 - Math.sin(ph * Math.PI) * 0.15 + ph * 0.25), s2, s2);
+      }
     }
   }
 
@@ -3620,6 +3722,7 @@ function renderMinimap(g) {
     else if (t === T.WATER) col = th.water;
     else if (t === T.DOOR || t === T.ODOOR) col = '#a0703a';
     else if (t === T.BARS) col = '#8a8f9e';
+    else if (t === T.FOUNTAIN) col = '#4f9fe0';
     else col = lv.visible[i] ? '#6a6070' : '#3a3440';
     ctx.fillStyle = col;
     ctx.fillRect(x * s, y * s, s, s);
@@ -4040,7 +4143,7 @@ function describeTile(x, y) {
     if (it) msg(G, `${capitalize(itemName(G, it))}${it.price ? ` — ${it.price} мон.` : ''}. ${itemDesc(G, it)}`, 'hint');
     else if (tr && !tr.hidden) msg(G, `Ловушка: ${trapName(tr.type)}.`, 'hint');
     else {
-      const names = { [T.WALL]: 'Стена.', [T.FLOOR]: 'Пол.', [T.DOOR]: 'Закрытая дверь.', [T.ODOOR]: 'Открытая дверь.', [T.STAIRS]: 'Лестница вниз.', [T.UPSTAIRS]: 'Сюда вы спустились. Назад пути нет.', [T.WATER]: 'Неглубокая вода.', [T.GRASS]: 'Высокая трава. За ней ничего не видно.', [T.BARS]: 'Решётка клетки.' };
+      const names = { [T.WALL]: 'Стена.', [T.FLOOR]: 'Пол.', [T.DOOR]: 'Закрытая дверь.', [T.ODOOR]: 'Открытая дверь.', [T.STAIRS]: 'Лестница вниз.', [T.UPSTAIRS]: 'Сюда вы спустились. Назад пути нет.', [T.WATER]: 'Неглубокая вода.', [T.GRASS]: 'Высокая трава. За ней ничего не видно.', [T.BARS]: 'Решётка клетки.', [T.FOUNTAIN]: 'Фонтан. Можно попить, если не боитесь.', [T.DRY]: 'Высохший фонтан.' };
       msg(G, names[lv.tiles[idx(x, y)]] || 'Что-то непонятное.', 'hint');
     }
   }
@@ -4062,6 +4165,15 @@ function closeModal() {
   $('modal').hidden = true;
   $('modal').innerHTML = '';
   UI.modal = null;
+}
+
+function spriteURL(name) {
+  const c = document.createElement('canvas');
+  c.width = 40; c.height = 40;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(getSprite(name), 0, 0, 40, 40);
+  return c.toDataURL();
 }
 
 const _iconCache = new Map();
@@ -4213,7 +4325,7 @@ function showEnd() {
     ? ['Барсик спасён!', `Вы выбрались из колодца с котом на руках за ${G.turn} ${plural(G.turn, 'ход', 'хода', 'ходов')}. Барсик делает вид, что так и было задумано.`]
     : ['Конец пути', `Глубина ${o.depth}. Вас одолел: ${o.cause}. Барсик всё ещё ждёт внизу.`];
   openModal(`<div class="sheet" role="dialog" aria-label="${esc(lines[0])}">
-    <header><h2>${esc(lines[0])}</h2></header>
+    <header><img src="${spriteURL(won ? 'cat' : 'dog')}" alt="" width="40" height="40" style="image-rendering:pixelated"><h2>${esc(lines[0])}</h2></header>
     <div class="body">
       <p style="margin-top:8px">${esc(lines[1])}</p>
       <div class="end-stats">
@@ -4224,6 +4336,7 @@ function showEnd() {
         <div><small>Монеты</small><b>${p.gold}</b></div>
         <div><small>Ходов</small><b>${G.turn}</b></div>
       </div>
+      ${chronicleHTML()}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" id="e-again">Ещё раз</button>
         <button class="btn ghost" id="e-seed">Тот же сид (${G.seed})</button>
@@ -4234,6 +4347,23 @@ function showEnd() {
     $('e-seed').onclick = () => startNewGame(G.seed);
     $('e-title').onclick = () => { closeModal(); showTitle(); };
   });
+}
+
+function showHistory() {
+  const items = G.messages.slice(-80).map((m) => `<p class="${esc(m.cls)}" style="margin:0 0 3px">${esc(m.text)}</p>`).join('');
+  openModal(`<div class="sheet" role="dialog" aria-label="Журнал">
+    <header><h2>Журнал</h2><button class="close" aria-label="Закрыть">×</button></header>
+    <div class="body log-full">${items}</div></div>`, (m) => {
+    const b = m.querySelector('.body');
+    b.scrollTop = b.scrollHeight;
+  });
+}
+
+function chronicleHTML() {
+  const c = (G.chronicle || []).slice(-9);
+  if (!c.length) return '';
+  return `<h3 style="font:600 14px var(--font-display);color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin:14px 0 6px">Летопись</h3>
+    <ol class="chron">${c.map((e) => `<li><span>гл. ${e.depth}</span>${esc(e.text)}</li>`).join('')}</ol>`;
 }
 
 function addRecord() {
@@ -4407,7 +4537,7 @@ function onTapTile(tx, ty) {
   }
   if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) { move(dx, dy); return; }
   if (!inBounds(tx, ty) || !G.level.seen[idx(tx, ty)]) return;
-  if (!isPassableTile(G.level.tiles[idx(tx, ty)]) && !actorAt(G, tx, ty)) {
+  if (!isPassableTile(G.level.tiles[idx(tx, ty)]) && !actorAt(G, tx, ty) && G.level.tiles[idx(tx, ty)] !== T.FOUNTAIN) {
     // Тап по стене — идём к ближайшей проходимой клетке рядом
     return;
   }
@@ -4480,6 +4610,7 @@ function bindInput() {
   $('btn-help').onclick = showHelp;
   $('btn-menu').onclick = showMenu;
   $('mini').onclick = toggleMini;
+  $('log').onclick = () => { if (G && $('title').hidden) showHistory(); };
   $('modal').addEventListener('pointerdown', (e) => { if (e.target === $('modal') && (!G || !G.over)) closeModal(); });
   if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => resizeRenderer()).observe($('stage'));
 }

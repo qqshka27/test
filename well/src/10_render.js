@@ -145,6 +145,17 @@ function drawTilePixels(ctx, lv, th, x, y) {
         px(ctx, shade(th.grass, 1.35), gx, gy, 1, 1);
       }
       break;
+    case T.FOUNTAIN:
+    case T.DRY: {
+      drawFloorPixels(ctx, th, X, Y, x, y);
+      px(ctx, '#7a7f8e', X + 1, Y + 3, 6, 4);
+      px(ctx, '#a0a5b4', X + 1, Y + 3, 6, 1);
+      px(ctx, '#5a5f6e', X + 1, Y + 6, 6, 1);
+      px(ctx, '#8a8f9e', X + 3, Y + 1, 2, 2);
+      px(ctx, t === T.FOUNTAIN ? '#4f9fe0' : '#4a3a2a', X + 2, Y + 4, 4, 2);
+      if (t === T.FOUNTAIN) px(ctx, '#bfe6ff', X + 3, Y + 4, 1, 1);
+      break;
+    }
     case T.BARS:
       drawFloorPixels(ctx, th, X, Y, x, y);
       for (let i = 0; i < 4; i++) px(ctx, '#8a8f9e', X + 1 + i * 2, Y, 1, 8);
@@ -253,6 +264,18 @@ function renderFrame(g, dt) {
       ctx.fillStyle = 'rgba(180,220,255,0.10)';
       const wy = (Math.sin(ph) * 0.5 + 0.5) * ts * 0.7;
       ctx.fillRect(toX(x) + ts * 0.15, toY(y) + wy, ts * 0.5, Math.max(1, ts / 8));
+    }
+  }
+
+  // Брызги фонтанов
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    if (lv.tiles[idx(x, y)] === T.FOUNTAIN && lv.visible[idx(x, y)]) {
+      for (let k2 = 0; k2 < 3; k2++) {
+        const ph = (R.time * 1.4 + k2 / 3 + x * 0.1) % 1;
+        ctx.fillStyle = `rgba(190,230,255,${(1 - ph) * 0.8})`;
+        const s2 = Math.max(2, ts / 12);
+        ctx.fillRect(toX(x) + ts * (0.5 + (k2 - 1) * 0.18 * ph) - s2 / 2, toY(y) + ts * (0.2 - Math.sin(ph * Math.PI) * 0.15 + ph * 0.25), s2, s2);
+      }
     }
   }
 
@@ -533,6 +556,7 @@ function renderMinimap(g) {
     else if (t === T.WATER) col = th.water;
     else if (t === T.DOOR || t === T.ODOOR) col = '#a0703a';
     else if (t === T.BARS) col = '#8a8f9e';
+    else if (t === T.FOUNTAIN) col = '#4f9fe0';
     else col = lv.visible[i] ? '#6a6070' : '#3a3440';
     ctx.fillStyle = col;
     ctx.fillRect(x * s, y * s, s, s);
