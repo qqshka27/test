@@ -4702,6 +4702,7 @@ function showHelp() {
         <dt>M</dt><dd>Мини-карта.</dd>
       </dl>
       <p>Зелья, свитки и палочки в каждой игре выглядят по-новому. Узнать, что это, можно только попробовав или с помощью свитка опознания. Плохие зелья лучше бросать во врагов.</p>
+      <p>Клавиши работают и на русской раскладке: важно положение, а не буква.</p>
       <p>Сосиски не только едят. Собаки к ним неравнодушны.</p>
       <p>Игра сохраняется сама. Можно закрыть страницу и вернуться позже.</p>
     </div></div>`);
@@ -4888,10 +4889,22 @@ const KEYMAP = {
   Home: [-1, -1], PageUp: [1, -1], End: [-1, 1], PageDown: [1, 1],
 };
 
+// Клавиша по физическому положению: на русской раскладке WASD тоже работает
+function keyOf(e) {
+  const c = e.code || '';
+  if (/^Key[A-Z]$/.test(c)) return c.slice(3).toLowerCase();
+  if (c === 'Period') return e.shiftKey ? '>' : '.';
+  if (c === 'Comma') return e.shiftKey ? '<' : ',';
+  if (c === 'Slash') return e.shiftKey ? '?' : '/';
+  if (/^Digit\d$/.test(c)) return c.slice(5);
+  if (/^Numpad\d$/.test(c)) return c.slice(6);
+  return e.key.length === 1 ? e.key.toLowerCase() : e.key;
+}
+
 function onKey(e) {
   if (e.target && e.target.tagName === 'INPUT') return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  const key = keyOf(e);
   // Окна
   if (!$('title').hidden) {
     if (e.key === 'Enter' && $('modal').hidden) { const b = $('t-cont') || $('t-new'); if (b) { b.click(); e.preventDefault(); } }
@@ -4919,7 +4932,7 @@ function onKey(e) {
     if (e.key === 'Enter' || key === 'f' || key === 't') { fireTarget(); e.preventDefault(); return; }
     if (e.key === 'Tab') { cycleTarget(); e.preventDefault(); return; }
   }
-  if (KEYMAP[key] && !(e.shiftKey && key.length === 1 && !/[a-z]/.test(key))) {
+  if (KEYMAP[key] && !(e.shiftKey && /^\d$/.test(key))) {
     e.preventDefault();
     const [dx, dy] = KEYMAP[key];
     move(dx, dy);
