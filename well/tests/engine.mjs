@@ -11,7 +11,7 @@ const ENGINE_FILES = readdirSync(src).filter((f) => /^0[0-8]_.*\.js$/.test(f)).s
 
 const EXPORTS = [
   'MAP_W', 'MAP_H', 'MAX_DEPTH', 'T', 'DIRS8', 'MONSTERS', 'WEAPONS', 'ARMORS', 'POTIONS', 'SCROLLS', 'WANDS',
-  'makeRNG', 'generateLevel', 'levelConnected', 'isPassableTile', 'bfsDistances', 'computeFOV', 'dijkstraMap',
+  'makeRNG', 'generateLevel', 'levelConnected', 'inRoom', 'isPassableTile', 'bfsDistances', 'computeFOV', 'dijkstraMap',
   'newGame', 'playerMove', 'playerWait', 'playerDescend', 'playerPickup', 'useItem', 'throwItem', 'zapWand',
   'equipItem', 'dropFromInv', 'itemName', 'isKnown', 'exploreStep', 'travelStep', 'visibleEnemies',
   'nearestEnemy', 'serializeGame', 'deserializeGame', 'idx', 'dist', 'statsOf', 'playerDamage', 'playerArmor',

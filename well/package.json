@@ -1,0 +1,13 @@
+{
+  "name": "kot-v-kolodce",
+  "version": "1.0.0",
+  "description": "Кот в колодце — пошаговый пиксельный рогалик в браузере",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "python3 tools/build.py",
+    "test": "node --test tests/engine.test.mjs",
+    "test:browser": "python3 tools/build.py && node tests/browser.mjs",
+    "bot": "node tests/bot.mjs 50"
+  }
+}

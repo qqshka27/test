@@ -51,6 +51,8 @@ function exploreGoals(g) {
     if (it.price || it.dropped || !lv.seen[idx(it.x, it.y)]) continue;
     if (full && it.kind !== 'gold' && it.kind !== 'chest' && !(STACKABLE.has(it.kind) && p.inv.some((o) => o.kind === it.kind && o.type === it.type))) continue;
     if (it.x === p.x && it.y === p.y) continue;
+    const tr = trapAt(g, it.x, it.y);
+    if (tr && !tr.hidden) continue;
     goals.push({ x: it.x, y: it.y });
   }
   // Замаскированные мимики выглядят как сундуки — исследователь к ним тоже идёт

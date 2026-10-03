@@ -32,10 +32,19 @@ function newGame(seed) {
   g.player.weapon = dagger;
   g.player.armor = jacket;
   g.known.potion.heal = true; // бабушка дала с собой, подписала
-  enterLevel(g, 1);
+  g.tips = {};
   msg(g, 'Барсик опять провалился в старый колодец. Придётся лезть за ним.', 'story');
-  msg(g, 'Стрелки или WASD — ходить. Тапните по клетке, чтобы пойти туда.', 'hint');
+  enterLevel(g, 1);
+  msg(g, 'Ходите стрелками или тапом по клетке. «Разведка» исследует уровень сама.', 'hint');
   return g;
+}
+
+// Подсказка, которая показывается один раз за игру
+function tip(g, key, text) {
+  if (!g.tips) g.tips = {};
+  if (g.tips[key]) return;
+  g.tips[key] = 1;
+  msg(g, text, 'hint');
 }
 
 function msg(g, text, cls = 'info') {
@@ -174,10 +183,11 @@ function populate(g) {
     const type = pickMonsterType(g, depth);
     const m = spawnMonster(g, type, p.x, p.y, { awake: rng.chance(0.25) });
     // Иногда приходят стаями
-    if ((type === 'rat' || type === 'kobold' || type === 'skeleton') && rng.chance(0.3)) {
+    if ((type === 'rat' || type === 'kobold' || (type === 'skeleton' && depth <= 5)) && rng.chance(0.3)) {
+      let extra = depth <= 2 ? 1 : 2;
       for (const [dx, dy] of DIRS8) {
         const nx = m.x + dx, ny = m.y + dy;
-        if (lv.tiles[idx(nx, ny)] === T.FLOOR && !occupied(g, nx, ny) && rng.chance(0.4)) spawnMonster(g, type, nx, ny);
+        if (extra > 0 && lv.tiles[idx(nx, ny)] === T.FLOOR && !occupied(g, nx, ny) && rng.chance(0.4)) { spawnMonster(g, type, nx, ny); extra--; }
       }
     }
   }
@@ -360,6 +370,11 @@ function damage(g, a, amount, source, crit) {
   fx(g, { type: 'sound', name: a === g.player ? 'hurt' : 'hit' });
   if (a === g.player) {
     fx(g, { type: 'shake', power: Math.min(6, 1 + amount / 3) });
+    if (a.hp > 0 && a.hp < a.maxHp * 0.35) {
+      tip(g, 'lowhp', a.inv.some((o) => o.kind === 'potion' && o.type === 'heal')
+        ? 'Здоровья мало! Выпейте зелье лечения из рюкзака (I) или отступите.'
+        : 'Здоровья мало! Отступите и переждите: раны понемногу заживают.');
+    }
     if (a.hp <= 0) {
       a.hp = 0;
       const cause = source && source !== a && source.type ? MONSTERS[source.type].name : (typeof source === 'string' ? source : 'несчастный случай');
@@ -478,6 +493,7 @@ function dropItem(g, it, x, y) {
         if (!inBounds(nx, ny)) continue;
         const t = g.level.tiles[idx(nx, ny)];
         if (!(t === T.FLOOR || t === T.GRASS || t === T.WATER || t === T.ODOOR)) continue;
+        if (trapAt(g, nx, ny)) continue;
         const other = itemAt(g, nx, ny);
         if (other) {
           if (other.kind === 'gold' && it.kind === 'gold') { other.qty += it.qty; return true; }
@@ -556,6 +572,13 @@ function pickUp(g, buy) {
   delete it.dropped;
   g.items = g.items.filter((o) => o !== it);
   msg(g, `Вы нашли: ${itemName(g, it)}.`, 'loot');
+  if (!isKnown(g, it)) {
+    if (it.kind === 'potion') tip(g, 'potion', 'Неизвестное зелье: может вылечить, а может отравить. Плохие зелья хорошо бросать во врагов.');
+    if (it.kind === 'scroll') tip(g, 'scroll', 'Свиток можно прочесть из рюкзака. Что он делает, узнаете после.');
+    if (it.kind === 'wand') tip(g, 'wand', 'Палочкой взмахивают в сторону цели. Заряды не бесконечны.');
+  }
+  if (it.kind === 'weapon' || it.kind === 'armor') tip(g, 'gear', 'Новое снаряжение надевается в рюкзаке (I).');
+  if (it.kind === 'knife') tip(g, 'knife', 'Метательные ножи бросаются кнопкой «Метнуть» (F). Потом их можно подобрать.');
   fx(g, { type: 'sound', name: 'pickup' });
   return true;
 }
@@ -629,7 +652,8 @@ function playerMove(g, dx, dy) {
     if (it.dropped) msg(g, `Здесь лежит: ${itemName(g, it)}.`, 'info');
     else pickUp(g, false); // в магазине только покажет цену
   }
-  if (t === T.STAIRS && !g.over) msg(g, 'Здесь лестница вниз. Нажмите «Вниз» или >.', 'hint');
+  if (t === T.STAIRS && !g.over) msg(g, 'Здесь лестница вниз. Нажмите «Вниз» или >. Назад подняться не получится.', 'hint');
+  if (g.level.shop && inRoom(g.level.shop, nx, ny)) tip(g, 'shop', 'Это лавка. Встаньте на товар и нажмите «Купить».');
   return endTurn(g);
 }
 

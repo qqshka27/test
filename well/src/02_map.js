@@ -99,7 +99,7 @@ function genCaves(rng) {
     let tiles = newTiles(T.WALL);
     for (let y = 1; y < MAP_H - 1; y++)
       for (let x = 1; x < MAP_W - 1; x++)
-        tiles[idx(x, y)] = rng.chance(0.44) ? T.WALL : T.FLOOR;
+        tiles[idx(x, y)] = rng.chance(0.43) ? T.WALL : T.FLOOR;
     for (let it = 0; it < 5; it++) {
       const next = newTiles(T.WALL);
       for (let y = 1; y < MAP_H - 1; y++) {
@@ -124,7 +124,7 @@ function genCaves(rng) {
       if (size > bestSize) { bestSize = size; best = region; }
       region++;
     }
-    if (bestSize < 520) continue;
+    if (bestSize < 430) continue;
     for (let i = 0; i < tiles.length; i++) if (tiles[i] === T.FLOOR && seen[i] !== best) tiles[i] = T.WALL;
     return { tiles, rooms: [] };
   }

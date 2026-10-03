@@ -538,6 +538,7 @@ function showTitle() {
     <div class="menu">
       ${save ? '<button class="btn" id="t-cont">Продолжить забег</button>' : ''}
       <button class="btn ${save ? 'ghost' : ''}" id="t-new">Новая игра</button>
+      <button class="btn ghost" id="t-daily">Забег дня · ${esc(todayLabel())}</button>
       <button class="btn ghost" id="t-help">Как играть</button>
     </div>
     <div class="seed"><label for="t-seed">Сид (необязательно):</label><input id="t-seed" inputmode="numeric" placeholder="случайный"></div>
@@ -553,7 +554,19 @@ function showTitle() {
     startNewGame(v && /^\d+$/.test(v) ? Number(v) : undefined);
   };
   $('t-help').onclick = () => showHelp();
+  $('t-daily').onclick = () => { audioInit(); startNewGame(dailySeed()); };
   animateTitleCat();
+}
+
+// Сид дня одинаков у всех, кто играет в этот день
+function dailySeed() {
+  const d = new Date();
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+function todayLabel() {
+  const m = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  const d = new Date();
+  return `${d.getDate()} ${m[d.getMonth()]}`;
 }
 
 function hideTitle() { $('title').hidden = true; }
