@@ -13,6 +13,8 @@ function travelCost(g) {
     if (!isPassableTile(t)) return Infinity;
     const trap = trapAt(g, x, y);
     if (trap && !trap.hidden) return 25; // обходим, но если иначе никак — наступаем
+    // Торговца и кота не обойти насквозь — прокладываем путь в обход
+    for (const a of g.actors) if (a.x === x && a.y === y && MONSTERS[a.type].peaceful) return Infinity;
     return 1;
   };
 }
@@ -31,6 +33,16 @@ function travelStep(g, tx, ty) {
   });
   if (!path || !path.length) return null;
   return [path[0][0] - p.x, path[0][1] - p.y];
+}
+
+// Весь путь до клетки (для подсказки под курсором)
+function travelPath(g, tx, ty) {
+  const p = g.player;
+  if (!inBounds(tx, ty) || (p.x === tx && p.y === ty)) return null;
+  const cost = travelCost(g);
+  const map = dijkstraMap([{ x: tx, y: ty }], (x, y) => (x === tx && y === ty ? 1 : cost(x, y)), 120);
+  if (map[idx(p.x, p.y)] === Infinity) return null;
+  return pathFrom(map, p.x, p.y);
 }
 
 function exploreGoals(g) {

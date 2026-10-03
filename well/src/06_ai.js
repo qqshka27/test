@@ -90,7 +90,10 @@ function monsterAct(g, m) {
     if (sees && g.rng.chance(def.boss ? 1 : 0.35)) {
       m.awake = true;
       if (def.boss) bossIntro(g, m);
-      else if (monsterVisible(g, m) && g.rng.chance(0.4)) msg(g, `${capitalize(def.name)} замечает вас.`, 'info');
+      else if (monsterVisible(g, m)) {
+        fx(g, { type: 'float', x: m.x, y: m.y, text: '!', color: '#ffd34e', big: true });
+        if (g.rng.chance(0.4)) msg(g, `${capitalize(def.name)} замечает вас.`, 'info');
+      }
     } else {
       return; // спит
     }
@@ -198,12 +201,18 @@ function casterAI(g, m, sees) {
     }
   }
   if (adjacentToPlayer(m, p)) {
-    if (g.rng.chance(0.5) && stepByMap(g, m, g._chase, -1)) return;
+    if (g.rng.chance(0.3) && stepByMap(g, m, g._chase, -1)) return;
     attack(g, m, p);
     return;
   }
-  if (sees && d < 4) { if (stepByMap(g, m, g._chase, -1)) return; }
-  if (sees && d <= 6) return; // держит дистанцию
+  if (sees && d <= 2 && g.rng.chance(0.5) && stepByMap(g, m, g._chase, -1)) return;
+  // Издалека швыряет сгусток тьмы
+  if (sees && d <= 5 && g.rng.chance(0.45) && clearLine(g.level, m.x, m.y, p.x, p.y)) {
+    if (canSee(g, m.x, m.y)) msg(g, 'Некромант швыряет сгусток тьмы!', 'info');
+    attack(g, m, p, { ranged: true, color: '#b28cff', dmg: [2, 5] });
+    return;
+  }
+  if (sees && d >= 3 && d <= 5) return; // держит дистанцию
   meleeAI(g, m, sees);
 }
 

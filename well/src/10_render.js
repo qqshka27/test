@@ -514,10 +514,39 @@ function renderFrame(g, dt) {
     ctx.strokeStyle = `rgba(255,211,78,${pulse})`;
     ctx.lineWidth = 2;
     ctx.strokeRect(toX(R.target.x) + 1, toY(R.target.y) + 1, ts - 2, ts - 2);
-  } else if (R.hover && lv.seen[idx(R.hover.x, R.hover.y)]) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  } else if (R.hover && inBounds(R.hover.x, R.hover.y) && lv.seen[idx(R.hover.x, R.hover.y)]) {
+    const hx = R.hover.x, hy = R.hover.y;
+    // Путь пунктиром, если идти туда
+    const key = `${hx},${hy},${p.x},${p.y},${g.turn}`;
+    if (R.hoverKey !== key) { R.hoverKey = key; R.hoverPath = typeof travelPath === 'function' ? travelPath(g, hx, hy) : null; }
+    if (R.hoverPath && R.hoverPath.length > 1 && !UI.auto) {
+      ctx.fillStyle = 'rgba(255,211,78,0.28)';
+      const d = Math.max(2, ts / 9);
+      for (const [x, y] of R.hoverPath.slice(0, -1)) ctx.fillRect(toX(x) + ts / 2 - d / 2, toY(y) + ts / 2 - d / 2, d, d);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
     ctx.lineWidth = 1;
-    ctx.strokeRect(toX(R.hover.x) + 0.5, toY(R.hover.y) + 0.5, ts - 1, ts - 1);
+    ctx.strokeRect(toX(hx) + 0.5, toY(hy) + 0.5, ts - 1, ts - 1);
+    // Подпись: что под курсором
+    let label = null;
+    const a = actorAt(g, hx, hy);
+    if (a && a !== p && monsterVisible(g, a)) {
+      const d2 = MONSTERS[a.type];
+      label = a.disguised ? 'сундук' : d2.peaceful ? d2.name : `${d2.name} ${a.hp}/${a.maxHp}`;
+    } else {
+      const it = itemAt(g, hx, hy);
+      if (it) label = itemName(g, it) + (it.price ? ` — ${it.price}` : '');
+    }
+    if (label) {
+      ctx.font = `${Math.max(12, ts * 0.34)}px "Tiny5", monospace`;
+      ctx.textAlign = 'center';
+      const lw = ctx.measureText(label).width + 10;
+      const lx = clamp(toX(hx) + ts / 2, lw / 2 + 4, R.w - lw / 2 - 4), ly = toY(hy) - 6;
+      ctx.fillStyle = 'rgba(10,8,14,0.85)';
+      ctx.fillRect(lx - lw / 2, ly - ts * 0.34 - 4, lw, ts * 0.34 + 9);
+      ctx.fillStyle = '#efe6d8';
+      ctx.fillText(label, lx, ly);
+    }
   }
 
   // Виньетка и эффекты экрана

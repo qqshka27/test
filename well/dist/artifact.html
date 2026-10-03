@@ -1345,7 +1345,7 @@ function populate(g) {
   };
 
   // Монстры
-  const nMon = 4 + Math.floor(depth * 1.1) + rng.int(0, 3);
+  const nMon = 4 + Math.floor(depth * 1.3) + rng.int(0, 3);
   for (let i = 0; i < nMon; i++) {
     const p = placeFree(7);
     if (!p) continue;
@@ -2008,6 +2008,8 @@ function trapName(type) {
 function triggerTrap(g, trap) {
   const p = g.player;
   trap.hidden = false;
+  // Магические ловушки срабатывают один раз, шипы остаются
+  if (trap.type !== 'spike') g.traps = g.traps.filter((t) => t !== trap);
   fx(g, { type: 'sound', name: 'trap' });
   switch (trap.type) {
     case 'spike': {
@@ -2224,7 +2226,10 @@ function monsterAct(g, m) {
     if (sees && g.rng.chance(def.boss ? 1 : 0.35)) {
       m.awake = true;
       if (def.boss) bossIntro(g, m);
-      else if (monsterVisible(g, m) && g.rng.chance(0.4)) msg(g, `${capitalize(def.name)} замечает вас.`, 'info');
+      else if (monsterVisible(g, m)) {
+        fx(g, { type: 'float', x: m.x, y: m.y, text: '!', color: '#ffd34e', big: true });
+        if (g.rng.chance(0.4)) msg(g, `${capitalize(def.name)} замечает вас.`, 'info');
+      }
     } else {
       return; // спит
     }
@@ -2332,12 +2337,18 @@ function casterAI(g, m, sees) {
     }
   }
   if (adjacentToPlayer(m, p)) {
-    if (g.rng.chance(0.5) && stepByMap(g, m, g._chase, -1)) return;
+    if (g.rng.chance(0.3) && stepByMap(g, m, g._chase, -1)) return;
     attack(g, m, p);
     return;
   }
-  if (sees && d < 4) { if (stepByMap(g, m, g._chase, -1)) return; }
-  if (sees && d <= 6) return; // держит дистанцию
+  if (sees && d <= 2 && g.rng.chance(0.5) && stepByMap(g, m, g._chase, -1)) return;
+  // Издалека швыряет сгусток тьмы
+  if (sees && d <= 5 && g.rng.chance(0.45) && clearLine(g.level, m.x, m.y, p.x, p.y)) {
+    if (canSee(g, m.x, m.y)) msg(g, 'Некромант швыряет сгусток тьмы!', 'info');
+    attack(g, m, p, { ranged: true, color: '#b28cff', dmg: [2, 5] });
+    return;
+  }
+  if (sees && d >= 3 && d <= 5) return; // держит дистанцию
   meleeAI(g, m, sees);
 }
 
@@ -2811,6 +2822,8 @@ function travelCost(g) {
     if (!isPassableTile(t)) return Infinity;
     const trap = trapAt(g, x, y);
     if (trap && !trap.hidden) return 25; // обходим, но если иначе никак — наступаем
+    // Торговца и кота не обойти насквозь — прокладываем путь в обход
+    for (const a of g.actors) if (a.x === x && a.y === y && MONSTERS[a.type].peaceful) return Infinity;
     return 1;
   };
 }
@@ -2829,6 +2842,16 @@ function travelStep(g, tx, ty) {
   });
   if (!path || !path.length) return null;
   return [path[0][0] - p.x, path[0][1] - p.y];
+}
+
+// Весь путь до клетки (для подсказки под курсором)
+function travelPath(g, tx, ty) {
+  const p = g.player;
+  if (!inBounds(tx, ty) || (p.x === tx && p.y === ty)) return null;
+  const cost = travelCost(g);
+  const map = dijkstraMap([{ x: tx, y: ty }], (x, y) => (x === tx && y === ty ? 1 : cost(x, y)), 120);
+  if (map[idx(p.x, p.y)] === Infinity) return null;
+  return pathFrom(map, p.x, p.y);
 }
 
 function exploreGoals(g) {
@@ -3941,10 +3964,39 @@ function renderFrame(g, dt) {
     ctx.strokeStyle = `rgba(255,211,78,${pulse})`;
     ctx.lineWidth = 2;
     ctx.strokeRect(toX(R.target.x) + 1, toY(R.target.y) + 1, ts - 2, ts - 2);
-  } else if (R.hover && lv.seen[idx(R.hover.x, R.hover.y)]) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  } else if (R.hover && inBounds(R.hover.x, R.hover.y) && lv.seen[idx(R.hover.x, R.hover.y)]) {
+    const hx = R.hover.x, hy = R.hover.y;
+    // Путь пунктиром, если идти туда
+    const key = `${hx},${hy},${p.x},${p.y},${g.turn}`;
+    if (R.hoverKey !== key) { R.hoverKey = key; R.hoverPath = typeof travelPath === 'function' ? travelPath(g, hx, hy) : null; }
+    if (R.hoverPath && R.hoverPath.length > 1 && !UI.auto) {
+      ctx.fillStyle = 'rgba(255,211,78,0.28)';
+      const d = Math.max(2, ts / 9);
+      for (const [x, y] of R.hoverPath.slice(0, -1)) ctx.fillRect(toX(x) + ts / 2 - d / 2, toY(y) + ts / 2 - d / 2, d, d);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
     ctx.lineWidth = 1;
-    ctx.strokeRect(toX(R.hover.x) + 0.5, toY(R.hover.y) + 0.5, ts - 1, ts - 1);
+    ctx.strokeRect(toX(hx) + 0.5, toY(hy) + 0.5, ts - 1, ts - 1);
+    // Подпись: что под курсором
+    let label = null;
+    const a = actorAt(g, hx, hy);
+    if (a && a !== p && monsterVisible(g, a)) {
+      const d2 = MONSTERS[a.type];
+      label = a.disguised ? 'сундук' : d2.peaceful ? d2.name : `${d2.name} ${a.hp}/${a.maxHp}`;
+    } else {
+      const it = itemAt(g, hx, hy);
+      if (it) label = itemName(g, it) + (it.price ? ` — ${it.price}` : '');
+    }
+    if (label) {
+      ctx.font = `${Math.max(12, ts * 0.34)}px "Tiny5", monospace`;
+      ctx.textAlign = 'center';
+      const lw = ctx.measureText(label).width + 10;
+      const lx = clamp(toX(hx) + ts / 2, lw / 2 + 4, R.w - lw / 2 - 4), ly = toY(hy) - 6;
+      ctx.fillStyle = 'rgba(10,8,14,0.85)';
+      ctx.fillRect(lx - lw / 2, ly - ts * 0.34 - 4, lw, ts * 0.34 + 9);
+      ctx.fillStyle = '#efe6d8';
+      ctx.fillText(label, lx, ly);
+    }
   }
 
   // Виньетка и эффекты экрана

@@ -203,7 +203,7 @@ function populate(g) {
   };
 
   // Монстры
-  const nMon = 4 + Math.floor(depth * 1.1) + rng.int(0, 3);
+  const nMon = 4 + Math.floor(depth * 1.3) + rng.int(0, 3);
   for (let i = 0; i < nMon; i++) {
     const p = placeFree(7);
     if (!p) continue;
@@ -866,6 +866,8 @@ function trapName(type) {
 function triggerTrap(g, trap) {
   const p = g.player;
   trap.hidden = false;
+  // Магические ловушки срабатывают один раз, шипы остаются
+  if (trap.type !== 'spike') g.traps = g.traps.filter((t) => t !== trap);
   fx(g, { type: 'sound', name: 'trap' });
   switch (trap.type) {
     case 'spike': {
