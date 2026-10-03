@@ -85,6 +85,8 @@ test('победа над Псом открывает клетку, Барсик
   }
   assert.ok(!g.actors.includes(dog), 'Пёс повержен');
   assert.ok(g.level.cageOpen, 'клетка открыта');
+  g.player.status = {}; // Пёс мог успеть оглушить лаем
+  g.actors = g.actors.filter((a) => a === cat); // убираем щенков и стражу
   g.player.x = cat.x; g.player.y = cat.y + 1;
   E.playerMove(g, 0, -1);
   assert.ok(g.over && g.over.won, 'победа');
