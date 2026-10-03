@@ -23,7 +23,10 @@ function toast(title, text) {
   const el = document.createElement('div');
   el.className = 'toast';
   el.innerHTML = `<b>${esc(title)}</b><span>${esc(text)}</span>`;
-  $('stage').appendChild(el);
+  let box = $('toasts');
+  if (!box) { box = document.createElement('div'); box.id = 'toasts'; $('stage').appendChild(box); }
+  while (box.children.length >= 3) box.firstChild.remove();
+  box.appendChild(el);
   setTimeout(() => el.classList.add('out'), 3200);
   setTimeout(() => el.remove(), 3800);
 }

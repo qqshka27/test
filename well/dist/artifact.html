@@ -199,16 +199,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--lantern); o
 .chron { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 4px; }
 .chron li { display: flex; gap: 10px; font-size: 14px; }
 .chron li span { font: 13px var(--font-display); color: var(--lantern); min-width: 3.4em; font-variant-numeric: tabular-nums; }
+#toasts { position: absolute; top: 44px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; flex-direction: column; gap: 6px; align-items: center; width: max-content; max-width: calc(100% - 32px); pointer-events: none; }
 .toast {
-  position: absolute; top: 44px; left: 50%; transform: translateX(-50%); z-index: 5; max-width: calc(100% - 32px);
+  position: relative; max-width: 100%;
   background: #1d1622f0; border: 1px solid var(--gold); border-radius: 8px; padding: 8px 14px;
   display: flex; flex-direction: column; align-items: center; text-align: center; box-shadow: 0 8px 30px #000a;
   animation: toast-in .35s ease-out; transition: opacity .5s, transform .5s; pointer-events: none;
 }
 .toast b { font: 15px var(--font-display); color: var(--gold); }
 .toast span { font-size: 13px; color: var(--dim); }
-.toast.out { opacity: 0; transform: translate(-50%, -10px); }
-@keyframes toast-in { from { opacity: 0; transform: translate(-50%, -14px); } }
+.toast.out { opacity: 0; transform: translateY(-10px); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-14px); } }
 .ach { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
 .ach li { display: flex; flex-direction: column; padding: 8px 12px; border-radius: 8px; background: var(--panel-2); opacity: .5; border: 1px solid transparent; }
 .ach li.got { opacity: 1; border-color: #ffd34e55; }
@@ -4212,7 +4213,10 @@ function toast(title, text) {
   const el = document.createElement('div');
   el.className = 'toast';
   el.innerHTML = `<b>${esc(title)}</b><span>${esc(text)}</span>`;
-  $('stage').appendChild(el);
+  let box = $('toasts');
+  if (!box) { box = document.createElement('div'); box.id = 'toasts'; $('stage').appendChild(box); }
+  while (box.children.length >= 3) box.firstChild.remove();
+  box.appendChild(el);
   setTimeout(() => el.classList.add('out'), 3200);
   setTimeout(() => el.remove(), 3800);
 }
